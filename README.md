@@ -4,6 +4,8 @@ Evidence-grounded learning companion for authorized YouTube / transcript content
 
 **Stack:** Next.js (`apps/web`) · FastAPI (`apps/api`) · Neon Postgres · Qdrant Cloud · Redis (local optional)
 
+**Design package:** [`START_HERE_IN_CURSOR.md`](START_HERE_IN_CURSOR.md) · [`docs/`](docs/) · [`prompts/`](prompts/) · [`docs/ARCHITECTURE_FREEZE.md`](docs/ARCHITECTURE_FREEZE.md) · [`AGENTS.md`](AGENTS.md)
+
 ## Layout
 
 ```text

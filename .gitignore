@@ -3,15 +3,6 @@
 .env.*
 !.env.example
 
-# Local-only development / agent planning (kept on disk, not in git)
-/docs/
-/prompts/
-/checklists/
-/.cursor/
-/AGENTS.md
-/PROMPT_SEQUENCE.md
-/START_HERE_IN_CURSOR.md
-
 # OS / editor
 .DS_Store
 .idea/
