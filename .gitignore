@@ -4,13 +4,13 @@
 !.env.example
 
 # Local agent / implementation planning (not part of the shipped code project)
-docs/
-prompts/
-checklists/
-.cursor/
-AGENTS.md
-PROMPT_SEQUENCE.md
-START_HERE_IN_CURSOR.md
+/docs/
+/prompts/
+/checklists/
+/.cursor/
+/AGENTS.md
+/PROMPT_SEQUENCE.md
+/START_HERE_IN_CURSOR.md
 
 # OS / editor
 .DS_Store
