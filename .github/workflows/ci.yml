@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# No cloud credentials. Offline lint + unit tests only.
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.6.14"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: |
+          uv sync --python 3.12
+          uv sync --python 3.12 --project apps/api
+
+      - name: Lint
+        run: |
+          uv run ruff check apps/api tests
+          uv run --project apps/api ruff check apps/api
+
+      - name: Test
+        run: |
+          uv run --project apps/api pytest apps/api/tests tests
+          bash scripts/check_layout.sh
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+
+      - name: Frontend workspace install + stub checks
+        run: |
+          npm install --ignore-scripts
+          npm run typecheck

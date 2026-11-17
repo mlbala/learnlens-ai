@@ -1,0 +1,41 @@
+# Local developer stack. Neon + Qdrant Cloud stay remote (no local DB volumes).
+# Usage:
+#   docker compose --profile redis up -d
+#   docker compose --profile app up --build
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: learnlens-api:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AI_CHAT_PROVIDER: fake
+      AI_EMBED_PROVIDER: fake
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    profiles:
+      - app
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    image: learnlens-web:local
+    ports:
+      - "3000:3000"
+    profiles:
+      - app
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    profiles:
+      - redis

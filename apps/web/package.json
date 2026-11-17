@@ -1,0 +1,15 @@
+{
+  "name": "@learnlens/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "LearnLens web (Next.js App Router) — scaffolding only in phase 00",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "lint": "echo 'web lint: deferred until Next.js app is scaffolded in a later phase'",
+    "typecheck": "echo 'web typecheck: deferred until Next.js app is scaffolded in a later phase'",
+    "test": "echo 'web tests: deferred until UI phases'"
+  }
+}

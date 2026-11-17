@@ -1,0 +1,16 @@
+{
+  "name": "@learnlens/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared API/contract types — scaffolding placeholder for phase 00",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "typecheck": "echo 'contracts typecheck: deferred until OpenAPI/types land'"
+  }
+}
