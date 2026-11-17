@@ -4,7 +4,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 
 | Phase | Status | Commit | Tests run / outcome | Blockers |
 | --- | --- | --- | --- | --- |
-| 00 project setup | complete | 8795901 (+ docs restore) | `make lint` / `make typecheck` / `make test` offline pass | concurrent main also contains phase-01 health slice (`4ccdb14`) |
+| 00 project setup | complete | 8795901 scaffold; 54c8c5e docs restore | `make help` / `make lint` / `make typecheck` / `make test` → 12 passed offline | concurrent main also contains phase-01 health slice (`4ccdb14`) |
 | 01 infra + vertical slice | present on main (concurrent) | 4ccdb14 | offline health tests in tree; not re-validated in phase-00 chat | out of scope for phase-00 request |
 | 02 data + auth | not started | | | |
 | 03 provider adapters | not started | | | |
@@ -32,5 +32,5 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 - [ ] Manual workflow observed if UI changes
 - [x] No keys, secrets, unauthorized scraping or invented timestamps
 - [x] AI calls are mocked by default; no surprise cost
-- [ ] Commit created or changes ready for review
+- [x] Commit created or changes ready for review
 - [x] Next phase dependencies satisfied
