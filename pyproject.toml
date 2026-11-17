@@ -1,0 +1,29 @@
+[project]
+name = "learnlens-ai"
+version = "0.0.0"
+description = "LearnLens AI monorepo — evidence-grounded learning companion"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pytest>=8.3",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["apps/api", "tests", "packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "apps/api/tests"]
+pythonpath = ["apps/api"]
+addopts = "-q"
