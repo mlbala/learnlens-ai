@@ -1,15 +1,29 @@
 {
   "name": "@learnlens/web",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "LearnLens web (Next.js App Router) — scaffolding only in phase 00",
+  "description": "LearnLens web — Next.js App Router infra vertical slice",
   "engines": {
     "node": ">=20.19.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "lint": "echo 'web lint: deferred until Next.js app is scaffolded in a later phase'",
-    "typecheck": "echo 'web typecheck: deferred until Next.js app is scaffolded in a later phase'",
-    "test": "echo 'web tests: deferred until UI phases'"
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'web unit tests deferred to UI phases'"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
   }
 }

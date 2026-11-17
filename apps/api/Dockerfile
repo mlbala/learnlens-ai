@@ -25,5 +25,5 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --chown=appuser:appuser app ./app
 USER appuser
 EXPOSE 8000
-# Scaffold entry: import settings only (no HTTP server until a later phase).
-CMD ["python", "-c", "from app.core.settings import get_settings; print(get_settings().app_name)"]
+# Health vertical slice — no paid AI calls on startup.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -32,7 +32,7 @@ jobs:
 
       - name: Test
         run: |
-          uv run --project apps/api pytest apps/api/tests tests
+          uv run --project apps/api pytest apps/api/tests tests -m "not integration"
           bash scripts/check_layout.sh
 
       - name: Setup Node

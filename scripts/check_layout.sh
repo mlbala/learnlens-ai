@@ -6,8 +6,11 @@ cd "$ROOT"
 
 required=(
   apps/api/app/core/scaffold.py
+  apps/api/app/main.py
+  apps/api/app/api/v1/health.py
   apps/api/Dockerfile
   apps/web/package.json
+  apps/web/app/page.tsx
   apps/web/Dockerfile
   packages/contracts/package.json
   infra/.gitkeep

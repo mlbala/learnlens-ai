@@ -16,6 +16,7 @@ services:
       AI_CHAT_PROVIDER: fake
       AI_EMBED_PROVIDER: fake
       ENVIRONMENT: development
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     ports:
       - "8000:8000"
     profiles:
@@ -26,6 +27,8 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
     image: learnlens-web:local
+    environment:
+      API_INTERNAL_URL: http://api:8000
     ports:
       - "3000:3000"
     profiles:

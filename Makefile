@@ -1,4 +1,4 @@
-# LearnLens AI — developer commands (phase 00 scaffolding)
+# LearnLens AI — developer commands (phase 01 vertical slice)
 # Prefer fake AI providers. Do not run paid provider calls from make targets.
 
 .DEFAULT_GOAL := help
@@ -17,6 +17,7 @@ help: ## Show available targets
 	@echo ""
 	@echo "Runtime: Python $(PYTHON_VERSION)+ via uv; Node >=20.19 for apps/web"
 	@echo "Default AI providers: fake (see .env.example). No paid API calls from make."
+	@echo "Data stores: Neon + Qdrant Cloud via env vars (no local DB volumes)."
 
 check-tools: ## Verify local tooling (uv, python, node)
 	@command -v $(UV) >/dev/null || (echo "blocker: uv not found — install https://docs.astral.sh/uv/"; exit 1)
@@ -38,25 +39,26 @@ lint: sync ## Lint Python with ruff
 	@$(UV) run ruff check apps/api tests
 	@$(UV) run --project apps/api ruff check apps/api
 
-typecheck: sync ## Typecheck API with Python (py_compile); web deferred
+typecheck: sync ## Typecheck API (compileall) + web (tsc)
 	@$(UV) run --project apps/api python -m compileall -q apps/api/app
-	@npm run typecheck
-	@echo "typecheck: Python compileall ok; web/contracts deferred stubs ok"
+	@npm run typecheck --workspace=@learnlens/web
+	@echo "typecheck: Python compileall ok; web tsc ok"
 
-test: sync ## Run offline unit tests (fake providers; no network)
-	@$(UV) run --project apps/api pytest apps/api/tests tests
+test: sync ## Run offline unit tests (fake providers; mocked health probes)
+	@$(UV) run --project apps/api pytest apps/api/tests tests -m "not integration"
 	@bash scripts/check_layout.sh
 
-test-integration: ## Integration tests (not wired in phase 00)
-	@echo "test-integration: deferred until phase 01+ (Neon/Qdrant/Redis)"
+test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
+	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration
 
-smoke: ## Opt-in smoke (not wired; must not call paid APIs in phase 00)
-	@echo "smoke: deferred until phase 01; keep AI_*_PROVIDER=fake"
+smoke: ## Opt-in smoke — API live/ready only (no paid AI)
+	@curl -fsS http://127.0.0.1:8000/health/live | head -c 400; echo
+	@curl -fsS http://127.0.0.1:8000/health/ready | head -c 400; echo
 
-dev: ## Local stack (not wired in phase 00)
-	@echo "dev: deferred until phase 01 vertical slice"
+dev: ## Run API (uvicorn) — set Neon/Qdrant in .env first
+	@$(UV) run --project apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-migrate: ## DB migrations (not wired in phase 00)
+migrate: ## DB migrations (not wired until phase 02)
 	@echo "migrate: deferred until phase 02"
 
 down: ## Stop local compose services
@@ -65,11 +67,12 @@ down: ## Stop local compose services
 docker-build: ## Build api + web images (no paid APIs)
 	@docker compose -f compose.yaml --profile app build
 
-docker-up: ## Run api + web scaffold containers
+docker-up: ## Run api + web containers (requires Neon/Qdrant env)
 	@docker compose -f compose.yaml --profile app up --build
 
 clean: ## Remove local caches (never deletes Neon/Qdrant cloud data)
 	@rm -rf .venv apps/api/.venv .pytest_cache apps/api/.pytest_cache .ruff_cache apps/api/.ruff_cache
 	@rm -rf node_modules apps/web/node_modules packages/contracts/node_modules
+	@rm -rf apps/web/.next
 	@find . -type d -name '__pycache__' -not -path './.git/*' -exec rm -rf {} + 2>/dev/null || true
 	@echo "clean: local caches removed (cloud data untouched)"

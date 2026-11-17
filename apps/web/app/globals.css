@@ -1,0 +1,76 @@
+:root {
+  --bg: #f7f8fa;
+  --fg: #12141a;
+  --muted: #5c6578;
+  --accent: #1a56db;
+  --ok: #0f7a45;
+  --bad: #b42318;
+  --border: #d8dee9;
+  --radius: 8px;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+}
+
+.brand {
+  font-size: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.lede {
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+  line-height: 1.5;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.health {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  background: #fff;
+}
+
+.health-ok {
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+}
+
+.health-bad {
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+}
+
+.health ul {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  line-height: 1.6;
+}
