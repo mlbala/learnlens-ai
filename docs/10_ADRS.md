@@ -37,3 +37,6 @@
 
 ### ADR-012 — React/Next.js frontend, containerized backend
 **Decision:** optionally deploy web on Vercel; API/worker on container host; Neon + Qdrant Cloud as managed data stores. **Why:** long-running jobs and data stores are not serverless frontend concerns; free cloud tiers keep developer machines light. **Consequence:** deployment topology and CORS/cookie proxy must be documented.
+
+### ADR-013 — Gemini text via generate_content for MVP adapters
+**Decision:** `GeminiTextAdapter` calls official `google-genai` `generate_content` with JSON MIME type rather than the Interactions API. **Why:** Interactions is recommended for new Google projects, but `generate_content` remains supported, maps cleanly to our structured-output contract, and is straightforward to unit-mock without live calls. **Consequence:** revisit Interactions when streaming/tooling needs justify a migration; keep adapter boundary so domain services stay provider-neutral.

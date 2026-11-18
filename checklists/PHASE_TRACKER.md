@@ -7,7 +7,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 00 project setup | complete | 8795901 scaffold; 54c8c5e docs restore | `make help` / `make lint` / `make typecheck` / `make test` → 12 passed offline | concurrent main also contains phase-01 health slice (`4ccdb14`) |
 | 01 infra + vertical slice | present on main (concurrent) | 4ccdb14 | offline health tests in tree; not re-validated in phase-00 chat | out of scope for phase-00 request |
 | 02 data + auth | complete | fd4991c on `dev/phase-02-data-auth` | `make lint` / `make typecheck` / `make test` → 21 passed offline (auth, CSRF, IDOR, migration structure); 2 integration deselected | live Neon Alembic upgrade/downgrade not executed here (avoid destructive reset); run `make migrate` when ready |
-| 03 provider adapters | not started | | | |
+| 03 provider adapters | complete | 92d215d on `dev` | `make lint` / `make typecheck` / `make test` → 50 passed offline (fake + mocked OpenAI/Gemini/DeepSeek text, OpenAI/Gemini embeddings, settings/providers, 401/429/timeout/refusal/dimension); 2 integration deselected | no live/paid provider calls; PUT `/settings/providers` deferred to later phase |
 | 04 YouTube metadata | not started | | | |
 | 05 authorized transcript ingestion | not started | | | |
 | 06 normalization + summaries | not started | | | |

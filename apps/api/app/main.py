@@ -9,7 +9,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth_router, health_router, me_router, videos_router
+from app.api.v1 import (
+    auth_router,
+    health_router,
+    me_router,
+    settings_providers_router,
+    videos_router,
+)
 from app.core.errors import http_exception_handler
 from app.core.rate_limit import configure_auth_rate_limiter
 from app.core.request_id import RequestIdMiddleware
@@ -89,6 +95,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(me_router)
     app.include_router(videos_router)
+    app.include_router(settings_providers_router)
     return app
 
 
