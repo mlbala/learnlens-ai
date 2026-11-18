@@ -49,7 +49,39 @@ class Settings(BaseSettings):
 
     # Providers default to fake — never call paid APIs from scaffolding.
     ai_chat_provider: str = Field(default="fake", alias="AI_CHAT_PROVIDER")
+    ai_chat_model: str = Field(default="fake-chat-v1", alias="AI_CHAT_MODEL")
     ai_embed_provider: str = Field(default="fake", alias="AI_EMBED_PROVIDER")
+    ai_embed_model: str = Field(default="fake-embed-v1", alias="AI_EMBED_MODEL")
+    # Fake-only default dimension. Real profiles must set verified vendor dimensions.
+    ai_embed_dimensions: int = Field(default=64, alias="AI_EMBED_DIMENSIONS")
+    ai_request_timeout_seconds: int = Field(default=45, alias="AI_REQUEST_TIMEOUT_SECONDS")
+    ai_max_output_tokens: int = Field(default=1800, alias="AI_MAX_OUTPUT_TOKENS")
+    ai_max_input_characters: int = Field(default=120_000, alias="AI_MAX_INPUT_CHARACTERS")
+    ai_max_retries: int = Field(default=2, alias="AI_MAX_RETRIES")
+    # Comma-separated allowlists (env-driven; do not hardcode obsolete catalog IDs).
+    ai_chat_provider_allowlist: str = Field(
+        default="fake,openai,gemini,deepseek",
+        alias="AI_CHAT_PROVIDER_ALLOWLIST",
+    )
+    ai_chat_model_allowlist: str = Field(
+        default="fake-chat-v1",
+        alias="AI_CHAT_MODEL_ALLOWLIST",
+    )
+    ai_embed_provider_allowlist: str = Field(
+        default="fake,openai,gemini",
+        alias="AI_EMBED_PROVIDER_ALLOWLIST",
+    )
+    ai_embed_model_allowlist: str = Field(
+        default="fake-embed-v1",
+        alias="AI_EMBED_MODEL_ALLOWLIST",
+    )
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
+    deepseek_base_url: str = Field(
+        default="https://api.deepseek.com",
+        alias="DEEPSEEK_BASE_URL",
+    )
 
     # Auth / sessions (phase 02). Prefer unpooled Neon URL for Alembic DDL.
     database_url_unpooled: str = Field(default="", alias="DATABASE_URL_UNPOOLED")
@@ -73,6 +105,12 @@ class Settings(BaseSettings):
         "qdrant_url",
         "qdrant_api_key",
         "session_secret",
+        "openai_api_key",
+        "gemini_api_key",
+        "deepseek_api_key",
+        "ai_chat_model",
+        "ai_embed_model",
+        "deepseek_base_url",
         mode="before",
     )
     @classmethod
@@ -80,6 +118,19 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip()
         return value
+
+    def key_configured(self, provider: str) -> bool:
+        """Whether a non-empty API key is present for the named provider (fake always true)."""
+        name = provider.strip().lower()
+        if name == "fake":
+            return True
+        if name == "openai":
+            return bool(self.openai_api_key)
+        if name == "gemini":
+            return bool(self.gemini_api_key)
+        if name == "deepseek":
+            return bool(self.deepseek_api_key)
+        return False
 
     @field_validator("cookie_secure", mode="before")
     @classmethod

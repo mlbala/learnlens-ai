@@ -11,6 +11,8 @@ REQUIRED_PATHS = (
     "apps/api/app/main.py",
     "apps/api/app/api/v1/health.py",
     "apps/api/app/api/v1/auth.py",
+    "apps/api/app/ai/factory.py",
+    "apps/api/app/api/v1/settings_providers.py",
     "apps/api/app/db/models/identity.py",
     "apps/api/alembic/versions/20261118_0001_initial_schema.py",
     "apps/api/Dockerfile",

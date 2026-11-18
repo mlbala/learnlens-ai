@@ -75,7 +75,8 @@ def test_refresh_rotates_and_rejects_reuse(client: TestClient) -> None:
     assert new_refresh != old_refresh
 
     # Replay old refresh with matching (new) CSRF should fail session lookup / CSRF bind.
-    client.cookies.set("ll_refresh", old_refresh)
+    # httpx2 jars are domain-scoped (testserver.local); overwrite that entry explicitly.
+    client.cookies.set("ll_refresh", old_refresh, domain="testserver.local")
     replay = client.post("/api/v1/auth/refresh", headers=auth_csrf_headers(client))
     assert replay.status_code in {401, 403}
 

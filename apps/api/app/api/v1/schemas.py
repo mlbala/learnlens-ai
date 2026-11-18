@@ -58,3 +58,47 @@ class VideoOut(BaseModel):
     youtube_video_id: str
     title: str
     status: str
+
+
+class ModelCapabilitiesOut(BaseModel):
+    supports_json_schema: bool
+    supports_stream: bool
+    supports_vision: bool
+    supports_batch: bool
+    max_context_tokens: int
+
+
+class ChatProviderSettingsOut(BaseModel):
+    provider: str
+    model: str
+    key_configured: bool
+    capabilities: ModelCapabilitiesOut
+    allowlisted_providers: list[str]
+    allowlisted_models: list[str]
+
+
+class EmbeddingProviderSettingsOut(BaseModel):
+    provider: str
+    model: str
+    dimensions: int
+    profile_id: str
+    key_configured: bool
+    capabilities: ModelCapabilitiesOut
+    allowlisted_providers: list[str]
+    allowlisted_models: list[str]
+    deepseek_embeddings_supported: bool = False
+
+
+class ProviderLimitsOut(BaseModel):
+    request_timeout_seconds: int
+    max_output_tokens: int
+    max_input_characters: int
+    max_retries: int
+
+
+class ProviderSettingsResponse(BaseModel):
+    """Public provider configuration — never includes API keys or secret material."""
+
+    chat: ChatProviderSettingsOut
+    embeddings: EmbeddingProviderSettingsOut
+    limits: ProviderLimitsOut
