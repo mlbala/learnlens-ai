@@ -51,16 +51,60 @@ class Settings(BaseSettings):
     ai_chat_provider: str = Field(default="fake", alias="AI_CHAT_PROVIDER")
     ai_embed_provider: str = Field(default="fake", alias="AI_EMBED_PROVIDER")
 
-    @field_validator("database_url", "qdrant_url", "qdrant_api_key", mode="before")
+    # Auth / sessions (phase 02). Prefer unpooled Neon URL for Alembic DDL.
+    database_url_unpooled: str = Field(default="", alias="DATABASE_URL_UNPOOLED")
+    session_secret: str = Field(default="dev-only-change-me", alias="SESSION_SECRET")
+    access_token_ttl_seconds: int = Field(default=900, alias="ACCESS_TOKEN_TTL_SECONDS")
+    refresh_token_ttl_seconds: int = Field(
+        default=60 * 60 * 24 * 14, alias="REFRESH_TOKEN_TTL_SECONDS"
+    )
+    cookie_secure: bool | None = Field(default=None, alias="COOKIE_SECURE")
+    cookie_samesite: str = Field(default="lax", alias="COOKIE_SAMESITE")
+    access_cookie_name: str = Field(default="ll_access", alias="ACCESS_COOKIE_NAME")
+    refresh_cookie_name: str = Field(default="ll_refresh", alias="REFRESH_COOKIE_NAME")
+    csrf_cookie_name: str = Field(default="ll_csrf", alias="CSRF_COOKIE_NAME")
+    auth_rate_limit_per_minute: int = Field(default=20, alias="AUTH_RATE_LIMIT_PER_MINUTE")
+    # Never enable in production — reserved for offline tests only.
+    allow_test_seed: bool = Field(default=False, alias="ALLOW_TEST_SEED")
+
+    @field_validator(
+        "database_url",
+        "database_url_unpooled",
+        "qdrant_url",
+        "qdrant_api_key",
+        "session_secret",
+        mode="before",
+    )
     @classmethod
     def _strip_optional_str(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip()
         return value
 
+    @field_validator("cookie_secure", mode="before")
+    @classmethod
+    def _empty_cookie_secure(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+        return value
+
     def cors_origin_list(self) -> list[str]:
         """Return exact CORS origins (empty entries dropped)."""
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    def migration_database_url(self) -> str:
+        """DDL prefers the direct (unpooled) Neon connection."""
+        return self.database_url_unpooled or self.database_url
+
+    def is_production_like(self) -> bool:
+        return self.environment.lower() in {"production", "staging", "prod"}
+
 
 
 @lru_cache(maxsize=1)

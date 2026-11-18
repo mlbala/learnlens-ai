@@ -58,8 +58,11 @@ smoke: ## Opt-in smoke — API live/ready only (no paid AI)
 dev: ## Run API (uvicorn) — set Neon/Qdrant in .env first
 	@$(UV) run --project apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-migrate: ## DB migrations (not wired until phase 02)
-	@echo "migrate: deferred until phase 02"
+migrate: sync ## Apply Alembic migrations to Neon (uses DATABASE_URL_UNPOOLED or DATABASE_URL)
+	@cd apps/api && $(UV) run alembic upgrade head
+
+migrate-down: sync ## Downgrade one Alembic revision (Neon)
+	@cd apps/api && $(UV) run alembic downgrade -1
 
 down: ## Stop local compose services
 	@docker compose -f compose.yaml --profile app --profile redis down

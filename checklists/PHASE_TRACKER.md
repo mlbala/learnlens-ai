@@ -6,7 +6,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | --- | --- | --- | --- | --- |
 | 00 project setup | complete | 8795901 scaffold; 54c8c5e docs restore | `make help` / `make lint` / `make typecheck` / `make test` → 12 passed offline | concurrent main also contains phase-01 health slice (`4ccdb14`) |
 | 01 infra + vertical slice | present on main (concurrent) | 4ccdb14 | offline health tests in tree; not re-validated in phase-00 chat | out of scope for phase-00 request |
-| 02 data + auth | not started | | | |
+| 02 data + auth | complete | pending commit on `dev/phase-02-data-auth` | `make lint` + `make test` → offline auth/IDOR/migration structure tests passed; live Neon upgrade/downgrade not run (avoid destructive reset) | live Alembic upgrade/downgrade on Neon deferred to operator `make migrate` |
 | 03 provider adapters | not started | | | |
 | 04 YouTube metadata | not started | | | |
 | 05 authorized transcript ingestion | not started | | | |
