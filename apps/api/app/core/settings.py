@@ -112,6 +112,33 @@ class Settings(BaseSettings):
     youtube_playlist_page_size: int = Field(default=50, alias="YOUTUBE_PLAYLIST_PAGE_SIZE")
     youtube_playlist_max_items: int = Field(default=200, alias="YOUTUBE_PLAYLIST_MAX_ITEMS")
 
+    # Transcript ingestion (phase 05) — private storage + Celery jobs; no media download.
+    transcript_max_upload_bytes: int = Field(
+        default=10 * 1024 * 1024, alias="TRANSCRIPT_MAX_UPLOAD_BYTES"
+    )
+    transcript_max_characters: int = Field(
+        default=200_000, alias="TRANSCRIPT_MAX_CHARACTERS"
+    )
+    transcript_storage_backend: str = Field(
+        default="local", alias="TRANSCRIPT_STORAGE_BACKEND"
+    )
+    transcript_storage_path: str = Field(
+        default=".data/transcripts", alias="TRANSCRIPT_STORAGE_PATH"
+    )
+    transcript_job_max_attempts: int = Field(
+        default=3, alias="TRANSCRIPT_JOB_MAX_ATTEMPTS"
+    )
+    transcript_job_soft_time_limit_seconds: int = Field(
+        default=120, alias="TRANSCRIPT_JOB_SOFT_TIME_LIMIT_SECONDS"
+    )
+    transcript_job_time_limit_seconds: int = Field(
+        default=180, alias="TRANSCRIPT_JOB_TIME_LIMIT_SECONDS"
+    )
+    # Eager by default for offline/dev tests (no Redis required). Set false for real workers.
+    celery_task_always_eager: bool = Field(
+        default=True, alias="CELERY_TASK_ALWAYS_EAGER"
+    )
+
     @field_validator(
         "database_url",
         "database_url_unpooled",

@@ -1,0 +1,3 @@
+This is fixture transcript text for LearnLens tests.
+
+It has no timestamps and must never invent them.

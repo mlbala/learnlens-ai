@@ -9,7 +9,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 02 data + auth | complete | fd4991c on `dev/phase-02-data-auth` | `make lint` / `make typecheck` / `make test` → 21 passed offline (auth, CSRF, IDOR, migration structure); 2 integration deselected | live Neon Alembic upgrade/downgrade not executed here (avoid destructive reset); run `make migrate` when ready |
 | 03 provider adapters | complete | 92d215d on `dev` | `make lint` / `make typecheck` / `make test` → 50 passed offline (fake + mocked OpenAI/Gemini/DeepSeek text, OpenAI/Gemini embeddings, settings/providers, 401/429/timeout/refusal/dimension); 2 integration deselected | no live/paid provider calls; PUT `/settings/providers` deferred to later phase |
 | 04 YouTube metadata | complete | b090616 on `dev` | `make lint` / `make typecheck` / `make test` → 84 passed offline (URL/SSRF, fixture video/playlist import, multi-page order + unavailable items, idempotency, never summarized); 2 integration deselected | no live YouTube Data API calls; official client present but default provider is fake |
-| 05 authorized transcript ingestion | not started | | | |
+| 05 authorized transcript ingestion | complete | (pending commit on `dev`) | `make lint` / `make typecheck` / `make test` → 102 passed offline (SRT/VTT exact ms, TXT null timestamps, 413/attestation/tenant, eager worker retries + idempotency); 2 integration deselected | no Redis required (CELERY_TASK_ALWAYS_EAGER); no paid APIs; media/ASR not implemented by design |
 | 06 normalization + summaries | not started | | | |
 | 07 Qdrant indexing/search | not started | | | |
 | 08 grounded QA | not started | | | |
