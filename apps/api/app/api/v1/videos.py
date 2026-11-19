@@ -1,15 +1,17 @@
-"""Video metadata import and workspace-scoped reads."""
+"""Video metadata import, transcript upload, and workspace-scoped reads."""
 
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.api.deps import CsrfAuth, CurrentAuth, DbSession, SettingsDep
 from app.api.v1.schemas import (
     ImportNoticeOut,
+    TranscriptUploadAccepted,
     VideoImportResponse,
     VideoListResponse,
     VideoOut,
@@ -17,6 +19,7 @@ from app.api.v1.schemas import (
 )
 from app.core.errors import not_found, raise_api_error
 from app.services.access import AccessService
+from app.services.transcript_ingest import TranscriptIngestError, TranscriptIngestService
 from app.services.youtube_import import YoutubeImportService, map_youtube_error_to_http
 from app.youtube.errors import YoutubeMetadataError
 
@@ -26,6 +29,9 @@ router = APIRouter(prefix="/api/v1/videos", tags=["videos"])
 def _video_out(video: Any) -> VideoOut:
     meta = video.metadata_json if isinstance(video.metadata_json, dict) else {}
     coverage = meta.get("coverage") if isinstance(meta, dict) else None
+    transcript_access = bool(meta.get("transcript_access")) if isinstance(meta, dict) else False
+    if video.status == "ready":
+        transcript_access = True
     return VideoOut(
         id=video.id,
         workspace_id=video.workspace_id,
@@ -36,7 +42,7 @@ def _video_out(video: Any) -> VideoOut:
         duration_seconds=video.duration_seconds,
         source_url=video.source_url,
         metadata_json=video.metadata_json,
-        transcript_access=False,
+        transcript_access=transcript_access,
         coverage=coverage if isinstance(coverage, str) else None,
     )
 
@@ -102,3 +108,85 @@ async def get_video(
         # Fail closed: do not disclose whether the ID exists in another tenant.
         not_found(getattr(request.state, "request_id", None))
     return _video_out(video)
+
+
+@router.post(
+    "/{video_id}/transcripts",
+    response_model=TranscriptUploadAccepted,
+    status_code=202,
+)
+async def upload_transcript(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+    settings: SettingsDep,
+    rights_attested: Annotated[bool, Form()] = False,
+    source_kind: Annotated[str | None, Form()] = None,
+    paste_text: Annotated[str | None, Form()] = None,
+    file: Annotated[UploadFile | None, File()] = None,
+) -> JSONResponse:
+    """
+    Ingest a rights-attested SRT/VTT/TXT upload or pasted transcript.
+
+    No media download / ASR. Returns 202 with a durable job id.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    idem = request.headers.get("Idempotency-Key")
+
+    raw: bytes
+    filename: str | None
+    content_type: str | None
+    kind_hint = source_kind
+
+    if file is not None and file.filename:
+        # Read with hard cap (+1) so oversized payloads fail closed as 413.
+        max_bytes = settings.transcript_max_upload_bytes
+        raw = await file.read(max_bytes + 1)
+        filename = file.filename
+        content_type = file.content_type
+    elif paste_text is not None and paste_text.strip():
+        raw = paste_text.encode("utf-8")
+        filename = None
+        content_type = "text/plain; charset=utf-8"
+        kind_hint = kind_hint or "paste"
+    else:
+        raise_api_error(
+            422,
+            code="TRANSCRIPT_REQUIRED",
+            message="Provide a transcript file or paste_text.",
+            request_id=request_id,
+        )
+
+    service = TranscriptIngestService(db, settings)
+    try:
+        result = await service.ingest(
+            workspace_id=ctx.workspace.id,
+            user_id=ctx.user.id,
+            video_id=video_id,
+            raw=raw,
+            rights_attested=rights_attested,
+            filename=filename,
+            content_type=content_type,
+            source_kind_hint=kind_hint,
+            idempotency_key=idem,
+        )
+    except TranscriptIngestError as exc:
+        raise_api_error(
+            exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            request_id=request_id,
+        )
+
+    body = TranscriptUploadAccepted(
+        job_id=result.job.id,
+        status=result.job.status,
+        stage=result.job.stage,
+        percent=result.job.percent,
+        source_asset_id=result.asset.id if result.asset else result.job.source_asset_id,
+        source_revision=result.asset.source_revision if result.asset else None,
+        timecode_quality=result.asset.timecode_quality if result.asset else None,
+        replay=result.replay,
+    )
+    return JSONResponse(status_code=202, content=body.model_dump(mode="json"))

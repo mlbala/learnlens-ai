@@ -166,3 +166,54 @@ class ProviderSettingsResponse(BaseModel):
     chat: ChatProviderSettingsOut
     embeddings: EmbeddingProviderSettingsOut
     limits: ProviderLimitsOut
+
+
+class TranscriptUploadAccepted(BaseModel):
+    """202 response for authorized transcript ingestion."""
+
+    job_id: uuid.UUID
+    status: str
+    stage: str
+    percent: int
+    source_asset_id: uuid.UUID | None = None
+    source_revision: int | None = None
+    timecode_quality: str | None = None
+    replay: bool = False
+
+
+class JobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    video_id: uuid.UUID | None = None
+    source_asset_id: uuid.UUID | None = None
+    job_type: str
+    status: str
+    stage: str
+    attempt: int
+    percent: int
+    last_error_code: str | None = None
+    result_resource_id: uuid.UUID | None = None
+
+
+class TranscriptSegmentOut(BaseModel):
+    """Sanitized segment for UI — text is markup-stripped; never raw HTML."""
+
+    id: uuid.UUID
+    ordinal: int
+    text: str
+    start_ms: int | None = None
+    end_ms: int | None = None
+    content_hash: str
+
+
+class SourceAssetOut(BaseModel):
+    id: uuid.UUID
+    video_id: uuid.UUID
+    source_kind: str
+    content_hash: str
+    timecode_quality: str
+    source_revision: int
+    rights_attested_at: datetime | None = None
+    segments: list[TranscriptSegmentOut] = Field(default_factory=list)

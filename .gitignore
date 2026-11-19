@@ -35,6 +35,9 @@ apps/api/.venv/
 .neon/
 *.log
 
+# Private local transcript mock storage (phase 05)
+.data/
+
 # Docker
 **/.dockerignore.bak
 

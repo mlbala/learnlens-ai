@@ -1,3 +1,4 @@
+from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentRepository
 from app.db.repositories.jobs import IngestionJobRepository
 from app.db.repositories.playlists import PlaylistRepository
 from app.db.repositories.sessions import SessionRepository
@@ -12,4 +13,6 @@ __all__ = [
     "VideoRepository",
     "PlaylistRepository",
     "IngestionJobRepository",
+    "SourceAssetRepository",
+    "TranscriptSegmentRepository",
 ]

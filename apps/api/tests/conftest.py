@@ -36,8 +36,19 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("AUTH_RATE_LIMIT_PER_MINUTE", "100")
     monkeypatch.setenv("YOUTUBE_METADATA_PROVIDER", "fake")
     monkeypatch.setenv("YOUTUBE_API_KEY", "")
+    monkeypatch.setenv("CELERY_TASK_ALWAYS_EAGER", "true")
+    monkeypatch.setenv("TRANSCRIPT_STORAGE_BACKEND", "local")
+    monkeypatch.setenv("TRANSCRIPT_STORAGE_PATH", ".data/test-transcripts")
+    monkeypatch.setenv("TRANSCRIPT_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))
+    monkeypatch.setenv("TRANSCRIPT_MAX_CHARACTERS", "200000")
+    monkeypatch.setenv("TRANSCRIPT_JOB_MAX_ATTEMPTS", "3")
     clear_settings_cache()
     configure_auth_rate_limiter(limit=100, window_seconds=60.0)
+    # Keep Celery eager in sync with test settings (module may already be imported).
+    from app.workers.celery_app import celery_app
+
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
     return Settings(_env_file=None)
 
 

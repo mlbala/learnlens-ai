@@ -1,6 +1,6 @@
 /**
  * Shared contract types.
- * Phase 04 adds YouTube metadata import shapes (no transcript access from URL alone).
+ * Phase 05 adds authorized transcript upload + job status shapes.
  */
 
 export type ProviderKind = "fake" | "openai" | "gemini" | "deepseek";
@@ -11,7 +11,25 @@ export type VideoImportStatus =
   | "metadata_only"
   | "needs_transcript"
   | "unavailable"
-  | "fixture";
+  | "fixture"
+  | "ready"
+  | "validating"
+  | "failed";
+
+export type TranscriptSourceKind = "srt" | "vtt" | "txt" | "paste";
+
+export type TimecodeQuality = "original" | "none" | "unknown";
+
+export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type JobStage =
+  | "pending"
+  | "validating"
+  | "persisting"
+  | "segmenting"
+  | "complete"
+  | "error"
+  | "metadata";
 
 export interface ImportNotice {
   code: string;
@@ -24,8 +42,34 @@ export interface VideoImportContract {
   notices: ImportNotice[];
 }
 
+export interface TranscriptUploadAccepted {
+  job_id: string;
+  status: JobStatus | string;
+  stage: JobStage | string;
+  percent: number;
+  source_asset_id?: string | null;
+  source_revision?: number | null;
+  timecode_quality?: TimecodeQuality | string | null;
+  replay: boolean;
+}
+
+export interface JobStatusContract {
+  id: string;
+  workspace_id: string;
+  video_id?: string | null;
+  source_asset_id?: string | null;
+  job_type: string;
+  status: JobStatus | string;
+  stage: JobStage | string;
+  attempt: number;
+  percent: number;
+  last_error_code?: string | null;
+}
+
 export interface ScaffoldMeta {
-  phase: "04";
+  phase: "05";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
+  authorizedTranscriptIngest: true;
+  durableJobs: true;
 }

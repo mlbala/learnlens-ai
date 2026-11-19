@@ -23,6 +23,13 @@ required=(
   infra/.gitkeep
   fixtures/youtube/videos.json
   fixtures/youtube/playlist_pages.json
+  fixtures/transcripts/sample.srt
+  fixtures/transcripts/sample.vtt
+  fixtures/transcripts/sample.txt
+  apps/api/app/domain/transcript_parse.py
+  apps/api/app/workers/tasks.py
+  apps/api/app/storage/local.py
+  apps/api/app/api/v1/jobs.py
   Makefile
   compose.yaml
   .env.example
