@@ -13,6 +13,7 @@ from app.api.v1 import (
     auth_router,
     health_router,
     me_router,
+    playlists_router,
     settings_providers_router,
     videos_router,
 )
@@ -85,7 +86,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "X-CSRF-Token",
+            "Idempotency-Key",
+        ],
         expose_headers=["X-Request-ID"],
     )
     app.add_middleware(RequestIdMiddleware)
@@ -95,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(me_router)
     app.include_router(videos_router)
+    app.include_router(playlists_router)
     app.include_router(settings_providers_router)
     return app
 

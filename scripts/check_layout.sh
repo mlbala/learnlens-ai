@@ -9,15 +9,20 @@ required=(
   apps/api/app/main.py
   apps/api/app/api/v1/health.py
   apps/api/app/api/v1/auth.py
+  apps/api/app/api/v1/playlists.py
+  apps/api/app/domain/youtube_url.py
+  apps/api/app/youtube/factory.py
   apps/api/app/db/models/identity.py
   apps/api/alembic/versions/20261118_0001_initial_schema.py
+  apps/api/alembic/versions/20261119_0002_import_idempotency_result.py
   apps/api/Dockerfile
   apps/web/package.json
   apps/web/app/page.tsx
   apps/web/Dockerfile
   packages/contracts/package.json
   infra/.gitkeep
-  fixtures/.gitkeep
+  fixtures/youtube/videos.json
+  fixtures/youtube/playlist_pages.json
   Makefile
   compose.yaml
   .env.example

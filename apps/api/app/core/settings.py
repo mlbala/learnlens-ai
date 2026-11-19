@@ -99,6 +99,19 @@ class Settings(BaseSettings):
     # Never enable in production — reserved for offline tests only.
     allow_test_seed: bool = Field(default=False, alias="ALLOW_TEST_SEED")
 
+    # YouTube Data API metadata (phase 04) — fake fixtures by default; no paid calls.
+    youtube_metadata_provider: str = Field(default="fake", alias="YOUTUBE_METADATA_PROVIDER")
+    youtube_api_key: str = Field(default="", alias="YOUTUBE_API_KEY")
+    youtube_request_timeout_seconds: int = Field(
+        default=20, alias="YOUTUBE_REQUEST_TIMEOUT_SECONDS"
+    )
+    youtube_max_retries: int = Field(default=2, alias="YOUTUBE_MAX_RETRIES")
+    youtube_metadata_cache_ttl_seconds: int = Field(
+        default=300, alias="YOUTUBE_METADATA_CACHE_TTL_SECONDS"
+    )
+    youtube_playlist_page_size: int = Field(default=50, alias="YOUTUBE_PLAYLIST_PAGE_SIZE")
+    youtube_playlist_max_items: int = Field(default=200, alias="YOUTUBE_PLAYLIST_MAX_ITEMS")
+
     @field_validator(
         "database_url",
         "database_url_unpooled",
@@ -111,6 +124,8 @@ class Settings(BaseSettings):
         "ai_chat_model",
         "ai_embed_model",
         "deepseek_base_url",
+        "youtube_api_key",
+        "youtube_metadata_provider",
         mode="before",
     )
     @classmethod
