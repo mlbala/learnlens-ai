@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -58,6 +59,69 @@ class VideoOut(BaseModel):
     youtube_video_id: str
     title: str
     status: str
+    channel_title: str | None = None
+    duration_seconds: int | None = None
+    source_url: str | None = None
+    metadata_json: dict[str, Any] | None = None
+    transcript_access: bool = False
+    coverage: str | None = None
+
+
+class ImportNoticeOut(BaseModel):
+    code: str
+    message: str
+
+
+class YoutubeImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    youtube_url: str = Field(min_length=8, max_length=2048)
+
+
+class VideoImportResponse(BaseModel):
+    video: VideoOut
+    created: bool
+    notices: list[ImportNoticeOut]
+    companion_playlist_id: str | None = None
+    # Explicit product constraint for clients/UI.
+    transcript_from_url: bool = False
+
+
+class VideoListResponse(BaseModel):
+    items: list[VideoOut]
+    limit: int
+
+
+class PlaylistItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    playlist_position: int
+    youtube_video_id: str
+    video_id: uuid.UUID | None = None
+    state: str
+
+
+class PlaylistOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    youtube_playlist_id: str
+    title: str
+    status: str
+    total_items: int
+    items: list[PlaylistItemOut] = Field(default_factory=list)
+    coverage: dict[str, int] | None = None
+    transcript_from_url: bool = False
+
+
+class PlaylistImportResponse(BaseModel):
+    playlist: PlaylistOut
+    created: bool
+    truncated: bool
+    notices: list[ImportNoticeOut]
+    transcript_from_url: bool = False
 
 
 class ModelCapabilitiesOut(BaseModel):

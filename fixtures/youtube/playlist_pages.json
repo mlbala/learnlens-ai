@@ -1,0 +1,71 @@
+{
+  "_comment": "Synthetic multi-page playlist fixture — page_size 50 max; positions preserved including missing items.",
+  "playlists": {
+    "PLfixtureCourse01": {
+      "title": "Fixture communication course (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "total_reported": 7,
+      "pages": [
+        {
+          "items": [
+            {
+              "youtube_video_id": "vidPublic01",
+              "title": "Fixture lecture 1: Active listening (synthetic)",
+              "availability": "public",
+              "channel_title": "LearnLens Fixtures",
+              "duration_seconds": 600
+            },
+            {
+              "youtube_video_id": "vidPublic02",
+              "title": "Fixture lecture 2: Clarifying questions (synthetic)",
+              "availability": "public",
+              "channel_title": "LearnLens Fixtures",
+              "duration_seconds": 720
+            },
+            {
+              "youtube_video_id": "vidPrivate9",
+              "title": null,
+              "availability": "private",
+              "channel_title": null,
+              "duration_seconds": null
+            },
+            {
+              "youtube_video_id": "vidPublic03",
+              "title": "Fixture lecture 3: Feedback loops (synthetic)",
+              "availability": "public",
+              "channel_title": "LearnLens Fixtures",
+              "duration_seconds": 540
+            },
+            {
+              "youtube_video_id": "vidDeleted1",
+              "title": null,
+              "availability": "deleted",
+              "channel_title": null,
+              "duration_seconds": null
+            }
+          ],
+          "next_page_token": "page2"
+        },
+        {
+          "items": [
+            {
+              "youtube_video_id": "vidPublic04",
+              "title": "Fixture lecture 4: Conflict basics (synthetic)",
+              "availability": "public",
+              "channel_title": "LearnLens Fixtures",
+              "duration_seconds": 480
+            },
+            {
+              "youtube_video_id": "vidUnavail1",
+              "title": null,
+              "availability": "unavailable",
+              "channel_title": null,
+              "duration_seconds": null
+            }
+          ],
+          "next_page_token": null
+        }
+      ]
+    }
+  }
+}

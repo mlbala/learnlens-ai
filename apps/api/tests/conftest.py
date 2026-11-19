@@ -34,6 +34,8 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("ALLOW_TEST_SEED", "true")
     monkeypatch.setenv("AUTH_RATE_LIMIT_PER_MINUTE", "100")
+    monkeypatch.setenv("YOUTUBE_METADATA_PROVIDER", "fake")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "")
     clear_settings_cache()
     configure_auth_rate_limiter(limit=100, window_seconds=60.0)
     return Settings(_env_file=None)

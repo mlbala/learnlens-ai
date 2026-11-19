@@ -43,6 +43,8 @@ class IngestionJob(Base, TimestampMixin):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Phase 04: store imported video/playlist UUID for Idempotency-Key replay.
+    result_resource_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True)
 
 
 class OutboxEvent(Base):
