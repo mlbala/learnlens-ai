@@ -22,7 +22,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 15 observability/budgets | complete | fc1f3f2 on `dev` | `make lint` / `make typecheck` / `make test` → 179 API passed (4 deselected) + 44 web Vitest; fake providers only; no paid APIs | live Neon `usage_limits` migrate not run here; sample dashboard is fixture JSON not a live Grafana board |
 | 16 CI/deploy/release | complete | 73a2fd1 on `dev` | `make lint` / `make typecheck` / `make test` → 180 API passed (4 deselected) + 44 web; `make smoke-e2e` passed; fake providers only | Docker digests not pinned; live Neon backup drill not run; npm audit advisories remain warnings; do not deploy without operator credentials |
 | 17 OPTIONAL visual understanding | complete | 77e0d00 on `dev` | `make lint` / `make typecheck` / `make test` → 189 API passed (4 deselected) + 44 web; fixture media STT/vision offline; no paid APIs; no YouTube downloads | live Neon media migrate not run here; real STT/vision adapters not enabled (fake only) |
-| 18 OPTIONAL tutor/quiz/graph | complete | pending commit on `dev` | `make lint` / `make typecheck` / `make test` → 198 API passed (4 deselected) + 47 web Vitest; fake providers only | live Neon `20261120_0009` migrate not run here; no paid APIs; no learning-efficacy claims |
+| 18 OPTIONAL tutor/quiz/graph | complete | 9e0c2c6 on `dev` | `make lint` / `make typecheck` / `make test` → 198 API passed (4 deselected) + 47 web Vitest; fake providers only | live Neon `20261120_0009` migrate not run here; no paid APIs; no learning-efficacy claims |
 
 ## Per-phase review
 
