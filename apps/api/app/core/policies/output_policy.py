@@ -21,7 +21,7 @@ _ALLOWED_HOSTS = frozenset(
 )
 # Common secret / PII-ish fragments to scrub from assistant free text.
 _PII_FRAGMENTS = re.compile(
-    r"(?i)\b(ssn|social\s*security|credit\s*card|cvv|password\s*[:=])\b"
+    r"(?i)\b(ssn|social\s*security|credit\s*card|cvv|password\s*[:=]\s*\S+)"
 )
 
 
@@ -56,7 +56,22 @@ class OutputPolicy:
         return OutputPolicy.minimize_pii(OutputPolicy.strip_disallowed_urls(text))
 
     # Free-text keys only — never rewrite opaque IDs (segment UUIDs, etc.).
-    _TEXT_KEYS = frozenset({"answer", "text", "summary", "content", "snippet"})
+    _TEXT_KEYS = frozenset(
+        {
+            "answer",
+            "text",
+            "summary",
+            "content",
+            "snippet",
+            "prompt",
+            "explanation",
+            "title",
+            "overview",
+            "description",
+            "note",
+            "caveat",
+        }
+    )
 
     @staticmethod
     def sanitize_payload_strings(payload: dict[str, Any]) -> dict[str, Any]:

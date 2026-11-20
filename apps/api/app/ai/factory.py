@@ -10,56 +10,67 @@ from app.ai.text import DeepSeekTextAdapter, FakeTextAdapter, GeminiTextAdapter,
 from app.core.settings import Settings
 
 
-def build_text_model(settings: Settings) -> TextModel:
+def build_text_model(settings: Settings, *, guard: bool = True) -> TextModel:
+    """
+    Build a chat TextModel. By default wraps with GuardedTextModel so every
+    generate_structured call gets evidence sanitization + OutputPolicy.
+    """
+    # Lazy import avoids circular: ai_guardrails -> ai.contracts -> ai.__init__ -> factory.
+    from app.core.policies.ai_guardrails import GuardedTextModel
+
     provider, model = assert_chat_selection(settings)
     retries = settings.ai_max_retries
 
     if provider == "fake":
-        return FakeTextAdapter(model=model)
-
-    if provider == "openai":
+        inner: TextModel = FakeTextAdapter(model=model)
+    elif provider == "openai":
         if not settings.openai_api_key:
             raise ProviderConfigurationError(
                 "OPENAI_API_KEY is not configured.",
                 provider=provider,
                 details={"error_kind": "missing_key"},
             )
-        return OpenAITextAdapter(
+        inner = OpenAITextAdapter(
             api_key=settings.openai_api_key,
             model=model,
             max_retries=retries,
         )
-
-    if provider == "gemini":
+    elif provider == "gemini":
         if not settings.gemini_api_key:
             raise ProviderConfigurationError(
                 "GEMINI_API_KEY is not configured.",
                 provider=provider,
                 details={"error_kind": "missing_key"},
             )
-        return GeminiTextAdapter(
+        inner = GeminiTextAdapter(
             api_key=settings.gemini_api_key,
             model=model,
             max_retries=retries,
         )
-
-    if provider == "deepseek":
+    elif provider == "deepseek":
         if not settings.deepseek_api_key:
             raise ProviderConfigurationError(
                 "DEEPSEEK_API_KEY is not configured.",
                 provider=provider,
                 details={"error_kind": "missing_key"},
             )
-        return DeepSeekTextAdapter(
+        inner = DeepSeekTextAdapter(
             api_key=settings.deepseek_api_key,
             model=model,
             base_url=settings.deepseek_base_url,
             max_retries=retries,
         )
+    else:
+        raise ProviderNotSupported(
+            f"Chat provider '{provider}' is not implemented.",
+            provider=provider,
+        )
 
-    raise ProviderNotSupported(
-        f"Chat provider '{provider}' is not implemented.",
-        provider=provider,
+    if not guard:
+        return inner
+    return GuardedTextModel(
+        inner,
+        max_input_characters=settings.ai_max_input_characters,
     )
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.contracts import ModelRequest, TextModel
 from app.ai.factory import build_text_model
+from app.core.policies.ai_guardrails import AiGuardrailError
 from app.core.policies.audit_policy import AuditRecord, get_audit_policy
 from app.core.settings import Settings
 from app.db.base import utcnow
@@ -191,7 +192,11 @@ class TutorService:
             temperature=0.0,
             timeout_seconds=self._settings.ai_request_timeout_seconds,
         )
-        result = await self._text.generate_structured(request)
+        try:
+            result = await self._text.generate_structured(request)
+        except AiGuardrailError as exc:
+            status = 413 if "TOO_LARGE" in exc.code else 422
+            raise TutorError(status, exc.code, exc.message) from exc
         payload = result.parsed if isinstance(result.parsed, dict) else {}
 
         try:

@@ -6,6 +6,9 @@ from app.core.policies.output_policy import OutputPolicy
 from app.core.policies.privacy_policy import PrivacyPolicy
 from app.core.policies.usage_policy import UsagePolicy, UsageQuotaExceeded
 
+# AiGuardrails / GuardedTextModel live in ai_guardrails.py — import directly to
+# avoid circular imports with app.ai.factory.
+
 __all__ = [
     "AuditPolicy",
     "AuditRecord",

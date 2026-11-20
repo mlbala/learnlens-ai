@@ -8,8 +8,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.core.errors import error_body
 from app.core import rate_limit as rate_limit_mod
+from app.core.errors import error_body
 from app.core.settings import Settings
 
 _EXEMPT_PREFIXES = ("/health",)

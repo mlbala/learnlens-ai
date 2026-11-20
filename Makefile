@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON_VERSION ?= 3.12
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help sync format lint typecheck test test-integration eval smoke smoke-e2e provider-smoke licenses dev migrate down clean check-tools docker-build docker-up docker-prod-config audit
+.PHONY: help sync format lint typecheck test test-integration guardrails eval smoke smoke-e2e provider-smoke licenses dev migrate down clean check-tools docker-build docker-up docker-prod-config audit
 
 help: ## Show available targets
 	@echo "LearnLens AI — make targets"
@@ -55,6 +55,17 @@ test: sync ## Run offline unit tests (fake providers; mocked health probes)
 	@$(UV) run --project apps/api pytest apps/api/tests tests -m "not integration"
 	@npm run test --workspace=@learnlens/web
 	@bash scripts/check_layout.sh
+
+guardrails: sync ## AI/chat guardrails + security gate (fake providers only)
+	@$(UV) run --project apps/api pytest \
+		apps/api/tests/test_ai_guardrails.py \
+		apps/api/tests/test_security_gate.py \
+		apps/api/tests/test_grounded_qa.py \
+		apps/api/tests/test_qa_evidence.py \
+		apps/api/tests/test_tenant_isolation.py \
+		-m "not integration" -q
+	@npm run test --workspace=@learnlens/web -- tests/xss-escape.test.tsx tests/citations.test.ts tests/evidence-citation.test.tsx
+	@echo "guardrails: AI input/evidence/output gates + security tests ok"
 
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
 	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration

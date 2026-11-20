@@ -8,6 +8,7 @@ from app.ai.embeddings.openai_adapter import OpenAIEmbeddingAdapter
 from app.ai.errors import ProviderConfigurationError, ProviderNotSupported
 from app.ai.factory import build_embedding_model, build_text_model
 from app.ai.text.deepseek_adapter import DeepSeekTextAdapter
+from app.core.policies.ai_guardrails import GuardedTextModel
 from app.core.settings import Settings, clear_settings_cache
 
 
@@ -26,10 +27,23 @@ def test_deepseek_chat_plus_gemini_embeddings_independent(monkeypatch: pytest.Mo
 
     text = build_text_model(settings)
     embed = build_embedding_model(settings)
-    assert isinstance(text, DeepSeekTextAdapter)
+    assert isinstance(text, GuardedTextModel)
+    assert text.provider == "deepseek"
+    assert isinstance(text._inner, DeepSeekTextAdapter)  # noqa: SLF001 — factory guard wrap
     assert isinstance(embed, GeminiEmbeddingAdapter)
     assert embed.dimensions == 768
     assert "768" in embed.profile_id
+
+
+def test_build_text_model_unguarded_returns_inner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AI_CHAT_PROVIDER", "deepseek")
+    monkeypatch.setenv("AI_CHAT_MODEL", "deepseek-fixture-chat")
+    monkeypatch.setenv("AI_CHAT_MODEL_ALLOWLIST", "deepseek-fixture-chat")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-test")
+    clear_settings_cache()
+    settings = Settings(_env_file=None)
+    text = build_text_model(settings, guard=False)
+    assert isinstance(text, DeepSeekTextAdapter)
 
 
 def test_deepseek_chat_plus_openai_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:

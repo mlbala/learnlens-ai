@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.contracts import EmbeddingModel, ModelRequest, TextModel
 from app.ai.factory import build_embedding_model, build_text_model
 from app.core.observability.cost import estimate_provider_cost
+from app.core.policies.ai_guardrails import AiGuardrailError, AiGuardrails
 from app.core.policies.audit_policy import AuditRecord, get_audit_policy
 from app.core.policies.output_policy import OutputPolicy
 from app.core.policies.usage_policy import UsageQuotaExceeded, get_usage_policy
@@ -222,15 +223,17 @@ class GroundedQaService:
         explanation_mode: ExplanationMode = ExplanationMode.STANDARD,
         actor_user_id: uuid.UUID | None = None,
     ) -> GroundedAnswerResult:
-        question_clean = question.strip()
-        if not question_clean:
-            raise GroundedQaError(422, "INVALID_QUESTION", "Question must not be empty.")
-        if len(question_clean) > self._settings.ai_max_input_characters:
-            raise GroundedQaError(
-                413,
-                "QUESTION_TOO_LONG",
-                "Question exceeds the configured input limit.",
+        try:
+            question_clean = AiGuardrails.enforce_user_text(
+                question,
+                max_characters=self._settings.ai_max_input_characters,
+                code="QUESTION_TOO_LONG",
             )
+        except AiGuardrailError as exc:
+            oversized = {"QUESTION_TOO_LONG", "PAYLOAD_TOO_LARGE", "INPUT_TOO_LARGE"}
+            status = 413 if exc.code in oversized else 422
+            code = "INVALID_QUESTION" if exc.code == "EMPTY_INPUT" else exc.code
+            raise GroundedQaError(status, code, exc.message) from exc
 
         usage = get_usage_policy()
         if actor_user_id is not None:
@@ -330,25 +333,29 @@ class GroundedQaService:
         evidence_blob = wrap_evidence_items(evidence_items)
         model = self._text_model()
         started = time.perf_counter()
-        result = await model.generate_structured(
-            ModelRequest(
-                purpose="grounded_qa",
-                instructions=instructions_for(
-                    explanation_mode,
-                    scope=f"{authorized.scope_kind}",
-                ),
-                user_input=(
-                    f"{user_input_for(question=question_clean, mode=explanation_mode)}"
-                    f"\n\n{evidence_blob}"
-                ),
-                evidence=evidence_items,
-                response_schema=GROUNDED_QA_JSON_SCHEMA,
-                max_output_tokens=min(self._settings.ai_max_output_tokens, 1800),
-                temperature=0.0,
-                timeout_seconds=self._settings.ai_request_timeout_seconds,
-                prompt_version=prompt_version(),
+        try:
+            result = await model.generate_structured(
+                ModelRequest(
+                    purpose="grounded_qa",
+                    instructions=instructions_for(
+                        explanation_mode,
+                        scope=f"{authorized.scope_kind}",
+                    ),
+                    user_input=(
+                        f"{user_input_for(question=question_clean, mode=explanation_mode)}"
+                        f"\n\n{evidence_blob}"
+                    ),
+                    evidence=evidence_items,
+                    response_schema=GROUNDED_QA_JSON_SCHEMA,
+                    max_output_tokens=min(self._settings.ai_max_output_tokens, 1800),
+                    temperature=0.0,
+                    timeout_seconds=self._settings.ai_request_timeout_seconds,
+                    prompt_version=prompt_version(),
+                )
             )
-        )
+        except AiGuardrailError as exc:
+            status = 413 if "TOO_LARGE" in exc.code else 422
+            raise GroundedQaError(status, exc.code, exc.message) from exc
         latency_ms = int((time.perf_counter() - started) * 1000)
         # OutputPolicy: strip unsafe URLs / minimize PII before citation membership checks.
         sanitized_payload = OutputPolicy.sanitize_payload_strings(

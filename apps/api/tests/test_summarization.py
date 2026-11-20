@@ -166,10 +166,11 @@ def await_adapter_generate(adapter: object) -> object:
     """Helper: one structured call with injection-laden evidence as data only."""
     from app.ai.contracts import ModelRequest
     from app.ai.text.fake import FakeTextAdapter
+    from app.core.policies.ai_guardrails import GuardedTextModel
     from app.domain.summary_prompts import instructions_for, wrap_evidence_items
     from app.domain.summary_schemas import SUMMARY_JSON_SCHEMA, SummaryKind
 
-    assert isinstance(adapter, FakeTextAdapter)
+    assert isinstance(adapter, (FakeTextAdapter, GuardedTextModel))
 
     async def _call() -> object:
         req = ModelRequest(
