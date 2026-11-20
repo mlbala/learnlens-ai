@@ -16,7 +16,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 09 UI design system | complete | 023eb16 on `dev` | `make lint` / `make typecheck` / `make test` → 138 API passed (4 deselected) + 18 web Vitest passed; `next build` ok; no paid APIs | designer screenshots not captured here — verify `/` and `/design-system` at 375/768/1280 |
 | 10 library/playlist/video screens | complete | e4ecede on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 30 web Vitest passed; `next build` ok; fixture library mode default; no paid APIs | authenticated live API library path optional via `NEXT_PUBLIC_LIBRARY_MODE=api` (requires session); designer screenshots not captured |
 | 11 lesson reader + chat | complete | 9a01ff7 on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 39 web Vitest passed; `next build` ok; fixture lesson/chat default; no paid APIs | designer screenshots at 375/768/1280 optional; API transcript snippet list not yet exposed (fixture snippets only) |
-| 12 notes + course synthesis | not started | | | |
+| 12 notes + course synthesis | complete | (pending commit on `dev`) | `make lint` / `make typecheck` / `make test` → 143 API passed (4 deselected) + 41 web Vitest passed; fixture/fake providers only; no paid APIs | optional designer screenshots of playlist course overview at 375/768/1280 |
 | 13 guardrails/security | not started | | | |
 | 14 eval/testing | not started | | | |
 | 15 observability/budgets | not started | | | |
