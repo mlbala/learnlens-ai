@@ -47,7 +47,7 @@ class FakeTextAdapter:
                 else sorted(request.response_schema.keys()),
             )
         )
-        payload = self._fixture_for(request.purpose, evidence_ids)
+        payload = self._fixture_for(request)
         parsed = validate_against_schema(payload, request.response_schema, provider=self.provider)
         return ModelResult(
             parsed=parsed,
@@ -62,7 +62,13 @@ class FakeTextAdapter:
             raw_text=None,
         )
 
-    def _fixture_for(self, purpose: str, evidence_ids: list[str]) -> dict[str, Any]:
+    def _fixture_for(self, request: ModelRequest) -> dict[str, Any]:
+        purpose = request.purpose
+        evidence_ids = [
+            str(item.get("id") or item.get("segment_id") or "")
+            for item in request.evidence
+            if item.get("id") or item.get("segment_id")
+        ]
         if purpose == "grounded_qa":
             if not evidence_ids:
                 return {
@@ -91,9 +97,11 @@ class FakeTextAdapter:
             ]
             return payload
 
+        if purpose == "playlist_summary":
+            return _playlist_summary_fixture(request.evidence)
+
         if purpose in {
             "video_summary",
-            "playlist_summary",
             "chunk_summary",
             "chapter_summary",
         }:
@@ -137,5 +145,85 @@ def _summary_fixture(evidence_ids: list[str]) -> dict[str, Any]:
             }
         ],
         "evidence_segment_ids": [eid],
+        "origin": "fixture_data",
+    }
+
+
+def _playlist_summary_fixture(evidence: list[dict[str, Any]]) -> dict[str, Any]:
+    """Course synthesis fixture — cites only included video/segment IDs from evidence."""
+    video_ids: list[str] = []
+    segment_ids: list[str] = []
+    for item in evidence:
+        vid = str(item.get("video_id") or "")
+        if vid and vid not in video_ids:
+            video_ids.append(vid)
+        for sid in item.get("evidence_segment_ids") or []:
+            s = str(sid)
+            if s and s not in segment_ids:
+                segment_ids.append(s)
+        fallback = str(item.get("id") or item.get("segment_id") or "")
+        if fallback and fallback not in segment_ids:
+            segment_ids.append(fallback)
+
+    if not video_ids:
+        video_ids = ["video_fixture_01"]
+    if not segment_ids:
+        segment_ids = ["seg_fixture_01"]
+
+    primary_vid = video_ids[0]
+    primary_seg = segment_ids[0]
+    modules = [
+        {
+            "title": "Fixture module: Communication foundations",
+            "summary": "Fixture overview of active listening across included lessons.",
+            "video_ids": list(video_ids),
+            "evidence_segment_ids": [primary_seg],
+        }
+    ]
+    learning_map = [
+        {
+            "label": f"Lesson {idx + 1}",
+            "video_ids": [vid],
+            "order": idx,
+        }
+        for idx, vid in enumerate(video_ids)
+    ]
+    concepts = [
+        {
+            "name": "Clarifying questions",
+            "description": "Fixture cross-video concept present in included lessons only.",
+            "video_ids": list(video_ids),
+            "evidence_segment_ids": [primary_seg],
+        }
+    ]
+    redundant = (
+        [
+            {
+                "topic": "Active listening",
+                "video_ids": list(video_ids[:2]),
+                "note": "Fixture redundant-topic grouping across ready lessons.",
+            }
+        ]
+        if len(video_ids) >= 2
+        else []
+    )
+    takeaways = [
+        {
+            "text": "Ask clarifying questions before you respond.",
+            "source_video_ids": [primary_vid],
+            "evidence_segment_ids": [primary_seg],
+            "provenance": "source_supported",
+        }
+    ]
+    return {
+        "overview": (
+            f"Fixture course overview based on {len(video_ids)} ready lesson(s). "
+            "Missing lessons are not invented."
+        ),
+        "topic_modules": modules,
+        "learning_map": learning_map,
+        "cross_video_concepts": concepts,
+        "redundant_topics": redundant,
+        "key_takeaways": takeaways,
         "origin": "fixture_data",
     }

@@ -103,9 +103,9 @@ export interface SummaryExampleContract {
 export interface SummaryContract {
   id: string;
   workspace_id: string;
-  scope_kind: "video" | "chapter" | "chunk" | string;
+  scope_kind: "video" | "chapter" | "chunk" | "playlist" | string;
   scope_id: string;
-  summary_kind: SummaryKind | string;
+  summary_kind: SummaryKind | "course" | string;
   revision: number;
   status: "ready" | "blocked" | "failed" | string;
   summary: string;
@@ -116,6 +116,47 @@ export interface SummaryContract {
   origin?: string | null;
   coverage_json?: Record<string, unknown> | null;
   provider_run_id?: string | null;
+}
+
+export interface PlaylistCourseSummaryContract {
+  id: string;
+  workspace_id: string;
+  playlist_id: string;
+  summary_kind: "course" | string;
+  status: string;
+  coverage_label: "partial" | "complete" | string;
+  coverage_ratio: number;
+  included_count: number;
+  excluded_count: number;
+  total_count: number;
+  included_video_ids: string[];
+  excluded_video_ids: string[];
+  source_revisions: Record<string, number>;
+  caveat?: string | null;
+  overview: string;
+  topic_modules: Array<{
+    title: string;
+    summary: string;
+    video_ids: string[];
+    evidence_segment_ids: string[];
+  }>;
+  learning_map: Array<{ label: string; video_ids: string[]; order: number }>;
+  cross_video_concepts: Array<{
+    name: string;
+    description: string;
+    video_ids: string[];
+    evidence_segment_ids: string[];
+  }>;
+  redundant_topics: Array<{ topic: string; video_ids: string[]; note: string }>;
+  key_takeaways: Array<{
+    text: string;
+    source_video_ids: string[];
+    evidence_segment_ids: string[];
+    provenance: Provenance | string;
+  }>;
+  origin?: string | null;
+  cache_hit?: boolean;
+  video_cache_hits?: number;
 }
 
 export interface QaClaimContract {
@@ -165,7 +206,7 @@ export interface ChatMessageContract {
 }
 
 export interface ScaffoldMeta {
-  phase: "11";
+  phase: "12";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
   authorizedTranscriptIngest: true;
@@ -174,6 +215,7 @@ export interface ScaffoldMeta {
   groundedQa: true;
   libraryScreens: true;
   lessonReaderAndChat: true;
+  playlistSynthesis: true;
 }
 
 export interface PlaylistCoverageContract {

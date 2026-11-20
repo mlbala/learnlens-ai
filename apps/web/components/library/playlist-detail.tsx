@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { CourseOverview } from "@/components/library/course-overview";
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
 import { PlaylistCoverageBar } from "@/components/library/playlist-coverage";
 import { VideoLessonRow } from "@/components/library/video-lesson-row";
@@ -11,15 +12,12 @@ import { ErrorState } from "@/components/patterns/error-state";
 import { PageHeader } from "@/components/patterns/page-header";
 import { PageSkeleton } from "@/components/patterns/page-skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { resolveLibraryMode } from "@/lib/library/client";
-import { usePlaylist } from "@/lib/library/query";
+import {
+  usePlaylist,
+  usePlaylistCourseSummary,
+  useSynthesizePlaylist,
+} from "@/lib/library/query";
 
 type PlaylistDetailProps = {
   playlistId: string;
@@ -30,6 +28,8 @@ type ItemFilter = "all" | "ready" | "needs_transcript" | "unavailable" | "failed
 export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
   const mode = resolveLibraryMode();
   const query = usePlaylist(playlistId);
+  const courseQuery = usePlaylistCourseSummary(playlistId);
+  const synthesize = useSynthesizePlaylist();
   const [filter, setFilter] = useState<ItemFilter>("all");
 
   const items = useMemo(() => {
@@ -117,24 +117,14 @@ export function PlaylistDetail({ playlistId }: PlaylistDetailProps) {
         </div>
 
         <aside className="space-y-4 lg:col-span-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Playlist themes</CardTitle>
-              <CardDescription>
-                Based on {playlist.coverage.ready}/{playlist.coverage.total} videos with permitted
-                transcripts. Unavailable items are excluded.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Synthesis and summaries use only ready lessons. This playlist is marked partial
-                whenever coverage is incomplete — never claimed as 100% if sources are unavailable.
-              </p>
-              {playlist.fixture_data ? (
-                <p className="text-xs">Synthetic fixture playlist — not live YouTube content.</p>
-              ) : null}
-            </CardContent>
-          </Card>
+          <CourseOverview
+            summary={courseQuery.data}
+            loading={courseQuery.isLoading}
+            synthesizing={synthesize.isPending}
+            onSynthesize={() => {
+              void synthesize.mutateAsync(playlistId).then(() => courseQuery.refetch());
+            }}
+          />
         </aside>
       </div>
     </>

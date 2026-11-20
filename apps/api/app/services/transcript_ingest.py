@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
 from app.db.models import IngestionJob, SourceAsset, Video
-from app.db.repositories import IngestionJobRepository, VideoRepository
+from app.db.repositories import IngestionJobRepository, PlaylistRepository, VideoRepository
 from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentRepository
 from app.domain.job_states import JobStage, JobStatus
 from app.domain.transcript_parse import (
@@ -48,6 +48,7 @@ class TranscriptIngestService:
         self._session = session
         self._settings = settings
         self._videos = VideoRepository(session)
+        self._playlists = PlaylistRepository(session)
         self._jobs = IngestionJobRepository(session)
         self._assets = SourceAssetRepository(session)
         self._segments = TranscriptSegmentRepository(session)
@@ -257,6 +258,7 @@ class TranscriptIngestService:
                 meta["source_revision"] = asset.source_revision
                 meta["transcript_access"] = True
                 video.metadata_json = meta
+                await self._playlists.mark_items_ready_for_video(video_id=video.id)
 
             await self._jobs.transition(
                 job,

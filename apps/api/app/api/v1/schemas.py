@@ -375,3 +375,74 @@ class PostChatMessageResponse(BaseModel):
 class ChatMessageListResponse(BaseModel):
     items: list[ChatMessageOut]
     limit: int
+
+
+class PlaylistSynthesizeAccepted(BaseModel):
+    """202 response for playlist course synthesis."""
+
+    job_id: uuid.UUID
+    status: str
+    stage: str
+    percent: int
+    playlist_id: uuid.UUID
+    replay: bool = False
+
+
+class PlaylistTakeawayOut(BaseModel):
+    text: str
+    source_video_ids: list[str] = Field(default_factory=list)
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+    provenance: str = "source_supported"
+
+
+class TopicModuleOut(BaseModel):
+    title: str
+    summary: str
+    video_ids: list[str] = Field(default_factory=list)
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+
+
+class LearningMapNodeOut(BaseModel):
+    label: str
+    video_ids: list[str] = Field(default_factory=list)
+    order: int = 0
+
+
+class CrossVideoConceptOut(BaseModel):
+    name: str
+    description: str
+    video_ids: list[str] = Field(default_factory=list)
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+
+
+class RedundantTopicOut(BaseModel):
+    topic: str
+    video_ids: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class PlaylistCourseSummaryOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    playlist_id: uuid.UUID
+    summary_kind: str
+    status: str
+    coverage_label: str
+    coverage_ratio: float
+    included_count: int
+    excluded_count: int
+    total_count: int
+    included_video_ids: list[str] = Field(default_factory=list)
+    excluded_video_ids: list[str] = Field(default_factory=list)
+    source_revisions: dict[str, int] = Field(default_factory=dict)
+    caveat: str | None = None
+    overview: str
+    topic_modules: list[TopicModuleOut] = Field(default_factory=list)
+    learning_map: list[LearningMapNodeOut] = Field(default_factory=list)
+    cross_video_concepts: list[CrossVideoConceptOut] = Field(default_factory=list)
+    redundant_topics: list[RedundantTopicOut] = Field(default_factory=list)
+    key_takeaways: list[PlaylistTakeawayOut] = Field(default_factory=list)
+    origin: str | None = None
+    cache_hit: bool = False
+    video_cache_hits: int = 0
+    provider_run_id: uuid.UUID | None = None

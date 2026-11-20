@@ -78,10 +78,11 @@ class IngestionJobRepository:
         self,
         *,
         workspace_id: uuid.UUID,
-        video_id: uuid.UUID,
+        video_id: uuid.UUID | None,
         source_asset_id: uuid.UUID | None,
         job_type: str,
         idempotency_key: str,
+        result_resource_id: uuid.UUID | None = None,
     ) -> IngestionJob:
         job = IngestionJob(
             workspace_id=workspace_id,
@@ -93,6 +94,7 @@ class IngestionJobRepository:
             attempt=0,
             idempotency_key=idempotency_key,
             percent=0,
+            result_resource_id=result_resource_id,
         )
         self._session.add(job)
         await self._session.flush()

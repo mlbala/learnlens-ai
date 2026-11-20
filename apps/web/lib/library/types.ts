@@ -72,6 +72,66 @@ export type PlaylistSummary = {
   fixture_data?: boolean;
 };
 
+export type PlaylistTakeaway = {
+  text: string;
+  source_video_ids: string[];
+  evidence_segment_ids: string[];
+  provenance: string;
+};
+
+export type TopicModule = {
+  title: string;
+  summary: string;
+  video_ids: string[];
+  evidence_segment_ids: string[];
+};
+
+export type LearningMapNode = {
+  label: string;
+  video_ids: string[];
+  order: number;
+};
+
+export type CrossVideoConcept = {
+  name: string;
+  description: string;
+  video_ids: string[];
+  evidence_segment_ids: string[];
+};
+
+export type RedundantTopic = {
+  topic: string;
+  video_ids: string[];
+  note: string;
+};
+
+export type PlaylistCourseSummary = {
+  id: string;
+  workspace_id: string;
+  playlist_id: string;
+  summary_kind: string;
+  status: string;
+  coverage_label: "partial" | "complete" | string;
+  coverage_ratio: number;
+  included_count: number;
+  excluded_count: number;
+  total_count: number;
+  included_video_ids: string[];
+  excluded_video_ids: string[];
+  source_revisions: Record<string, number>;
+  caveat?: string | null;
+  overview: string;
+  topic_modules: TopicModule[];
+  learning_map: LearningMapNode[];
+  cross_video_concepts: CrossVideoConcept[];
+  redundant_topics: RedundantTopic[];
+  key_takeaways: PlaylistTakeaway[];
+  origin?: string | null;
+  cache_hit?: boolean;
+  video_cache_hits?: number;
+  fixture_data?: boolean;
+};
+
 export type VideoImportResult = {
   video: VideoRecord;
   created: boolean;

@@ -10,6 +10,7 @@ import {
   FIXTURE_WORKSPACE_ID,
   cloneFixtureJob,
   fixtureDashboardStats,
+  fixturePlaylistCourseSummary,
   fixturePlaylistSummary,
 } from "@/lib/library/fixtures";
 import { parseSourceUrl } from "@/lib/library/url";
@@ -17,6 +18,7 @@ import type {
   DashboardStats,
   JobRecord,
   LibraryListPage,
+  PlaylistCourseSummary,
   PlaylistImportResult,
   PlaylistRecord,
   PlaylistSummary,
@@ -43,6 +45,8 @@ export interface LibraryClient {
   getVideo(videoId: string): Promise<VideoRecord>;
   listPlaylists(params?: ListParams): Promise<LibraryListPage<PlaylistSummary>>;
   getPlaylist(playlistId: string): Promise<PlaylistRecord>;
+  getPlaylistCourseSummary(playlistId: string): Promise<PlaylistCourseSummary>;
+  synthesizePlaylist(playlistId: string): Promise<JobRecord>;
   importSource(
     youtubeUrl: string,
     opts?: { preferPlaylist?: boolean },
@@ -131,6 +135,21 @@ export class FixtureLibraryClient implements LibraryClient {
       throw new LibraryApiError(404, "NOT_FOUND", "Playlist not found in fixture library.");
     }
     return this.playlist;
+  }
+
+  async getPlaylistCourseSummary(playlistId: string): Promise<PlaylistCourseSummary> {
+    await this.getPlaylist(playlistId);
+    return fixturePlaylistCourseSummary(this.playlist.id);
+  }
+
+  async synthesizePlaylist(playlistId: string): Promise<JobRecord> {
+    await this.getPlaylist(playlistId);
+    return cloneFixtureJob(playlistId, {
+      job_type: "playlist_synthesis",
+      status: "succeeded",
+      stage: "complete",
+      percent: 100,
+    });
   }
 
   async importSource(
@@ -438,6 +457,45 @@ export class HttpLibraryClient implements LibraryClient {
       transcript_from_url: false,
       coverage: normalizeCoverage(data.coverage, data.total_items),
     };
+  }
+
+  async getPlaylistCourseSummary(playlistId: string): Promise<PlaylistCourseSummary> {
+    return this.request<PlaylistCourseSummary>(
+      `/api/v1/playlists/${playlistId}/summary?ensure=true`,
+    );
+  }
+
+  async synthesizePlaylist(playlistId: string): Promise<JobRecord> {
+    const csrf = readCookie("ll_csrf");
+    const headers: Record<string, string> = {
+      "Idempotency-Key": crypto.randomUUID(),
+    };
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+    const accepted = await this.request<{
+      job_id: string;
+      status: string;
+      stage: string;
+      percent: number;
+      playlist_id: string;
+    }>(`/api/v1/playlists/${playlistId}/synthesize`, {
+      method: "POST",
+      headers,
+    });
+    try {
+      return await this.getJob(accepted.job_id);
+    } catch {
+      const playlist = await this.getPlaylist(playlistId);
+      return {
+        id: accepted.job_id,
+        workspace_id: playlist.workspace_id,
+        video_id: null,
+        job_type: "playlist_synthesis",
+        status: accepted.status,
+        stage: accepted.stage,
+        attempt: 1,
+        percent: accepted.percent,
+      };
+    }
   }
 
   async importSource(
