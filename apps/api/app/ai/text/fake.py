@@ -36,6 +36,7 @@ class FakeTextAdapter:
             for item in request.evidence
             if item.get("id") or item.get("segment_id")
         ]
+        # Malicious evidence must never alter adapter behavior / purpose routing.
         self.recorded.append(
             RecordedRequest(
                 purpose=request.purpose,
@@ -46,7 +47,7 @@ class FakeTextAdapter:
                 else sorted(request.response_schema.keys()),
             )
         )
-        payload = self._fixture_for(request.purpose)
+        payload = self._fixture_for(request.purpose, evidence_ids)
         parsed = validate_against_schema(payload, request.response_schema, provider=self.provider)
         return ModelResult(
             parsed=parsed,
@@ -61,11 +62,26 @@ class FakeTextAdapter:
             raw_text=None,
         )
 
-    def _fixture_for(self, purpose: str) -> dict[str, Any]:
+    def _fixture_for(self, purpose: str, evidence_ids: list[str]) -> dict[str, Any]:
         if purpose == "grounded_qa":
-            return dict(FAKE_GROUNDED_QA)
-        if purpose in {"video_summary", "playlist_summary"}:
-            return dict(FAKE_VIDEO_SUMMARY)
+            eid = evidence_ids[0] if evidence_ids else "seg_fixture_01"
+            payload = dict(FAKE_GROUNDED_QA)
+            payload["claims"] = [
+                {
+                    "text": "Clarify requirements before coding.",
+                    "citation_segment_ids": [eid],
+                }
+            ]
+            return payload
+
+        if purpose in {
+            "video_summary",
+            "playlist_summary",
+            "chunk_summary",
+            "chapter_summary",
+        }:
+            return _summary_fixture(evidence_ids)
+
         # Generic fixture — still marked as fixture data, not YouTube content.
         return {
             "result": "fixture_data",
@@ -75,3 +91,34 @@ class FakeTextAdapter:
 
     async def health(self) -> dict[str, str]:
         return {"status": "ok", "provider": self.provider, "model": self.model}
+
+
+def _summary_fixture(evidence_ids: list[str]) -> dict[str, Any]:
+    eid = evidence_ids[0] if evidence_ids else "seg_fixture_01"
+    # Keep static FAKE_VIDEO_SUMMARY shape available for import sites, but prefer
+    # request evidence IDs so citation validation succeeds offline.
+    base = dict(FAKE_VIDEO_SUMMARY)
+    return {
+        "summary": base.get(
+            "summary",
+            "Fixture summary: active listening and clarifying questions.",
+        ),
+        "key_points": list(
+            base.get("key_points") or ["Listen actively", "Ask clarifying questions"]
+        ),
+        "claims": [
+            {
+                "text": "Ask clarifying questions before you respond.",
+                "evidence_segment_ids": [eid],
+                "provenance": "source_supported",
+            }
+        ],
+        "examples": [
+            {
+                "text": "In a code review, restate the requirement in your own words.",
+                "origin": "ai_generated_illustration",
+            }
+        ],
+        "evidence_segment_ids": [eid],
+        "origin": "fixture_data",
+    }

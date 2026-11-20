@@ -88,6 +88,23 @@ class SourceAssetRepository:
         )
         return result.scalar_one_or_none()
 
+    async def latest_for_video(
+        self,
+        *,
+        video_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+    ) -> SourceAsset | None:
+        result = await self._session.execute(
+            select(SourceAsset)
+            .where(
+                SourceAsset.video_id == video_id,
+                SourceAsset.workspace_id == workspace_id,
+            )
+            .order_by(SourceAsset.source_revision.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
 
 class TranscriptSegmentRepository:
     def __init__(self, session: AsyncSession) -> None:

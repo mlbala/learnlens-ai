@@ -217,3 +217,65 @@ class SourceAssetOut(BaseModel):
     source_revision: int
     rights_attested_at: datetime | None = None
     segments: list[TranscriptSegmentOut] = Field(default_factory=list)
+
+
+class ChapterOut(BaseModel):
+    id: uuid.UUID
+    video_id: uuid.UUID
+    workspace_id: uuid.UUID
+    source_revision: int
+    title: str
+    start_segment_id: uuid.UUID | None = None
+    end_segment_id: uuid.UUID | None = None
+    topic_json: dict[str, Any] | None = None
+
+
+class ChapterListResponse(BaseModel):
+    items: list[ChapterOut]
+    source_revision: int | None = None
+
+
+class SummaryClaimOut(BaseModel):
+    text: str
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+    provenance: str = "source_supported"
+
+
+class SummaryExampleOut(BaseModel):
+    text: str
+    origin: str = "ai_generated_illustration"
+
+
+class SummaryOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    scope_kind: str
+    scope_id: uuid.UUID
+    summary_kind: str
+    revision: int
+    status: str
+    summary: str
+    key_points: list[str] = Field(default_factory=list)
+    claims: list[SummaryClaimOut] = Field(default_factory=list)
+    examples: list[SummaryExampleOut] = Field(default_factory=list)
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+    origin: str | None = None
+    coverage_json: dict[str, Any] | None = None
+    provider_run_id: uuid.UUID | None = None
+    cache_hit: bool = False
+
+
+class SummaryListResponse(BaseModel):
+    items: list[SummaryOut]
+    blocked: bool = False
+    source_revision: int | None = None
+
+
+class SummarizeAccepted(BaseModel):
+    video_id: uuid.UUID
+    chapter_count: int
+    summary_count: int
+    cache_hits: int
+    provider_calls: int
+    blocked: bool
+    source_revision: int

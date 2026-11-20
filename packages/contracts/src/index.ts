@@ -1,6 +1,6 @@
 /**
  * Shared contract types.
- * Phase 05 adds authorized transcript upload + job status shapes.
+ * Phase 06 adds chapter + hierarchical summary shapes.
  */
 
 export type ProviderKind = "fake" | "openai" | "gemini" | "deepseek";
@@ -30,6 +30,14 @@ export type JobStage =
   | "complete"
   | "error"
   | "metadata";
+
+export type SummaryKind = "short" | "detailed" | "simple" | "technical";
+
+export type Provenance =
+  | "source_supported"
+  | "ai_generated_illustration"
+  | "inference_or_interpretation"
+  | "not_covered";
 
 export interface ImportNotice {
   code: string;
@@ -66,10 +74,51 @@ export interface JobStatusContract {
   last_error_code?: string | null;
 }
 
+export interface ChapterContract {
+  id: string;
+  video_id: string;
+  workspace_id: string;
+  source_revision: number;
+  title: string;
+  start_segment_id?: string | null;
+  end_segment_id?: string | null;
+  topic_json?: Record<string, unknown> | null;
+}
+
+export interface SummaryClaimContract {
+  text: string;
+  evidence_segment_ids: string[];
+  provenance: Provenance | string;
+}
+
+export interface SummaryExampleContract {
+  text: string;
+  origin: "ai_generated_illustration" | "source_supported" | string;
+}
+
+export interface SummaryContract {
+  id: string;
+  workspace_id: string;
+  scope_kind: "video" | "chapter" | "chunk" | string;
+  scope_id: string;
+  summary_kind: SummaryKind | string;
+  revision: number;
+  status: "ready" | "blocked" | "failed" | string;
+  summary: string;
+  key_points: string[];
+  claims: SummaryClaimContract[];
+  examples: SummaryExampleContract[];
+  evidence_segment_ids: string[];
+  origin?: string | null;
+  coverage_json?: Record<string, unknown> | null;
+  provider_run_id?: string | null;
+}
+
 export interface ScaffoldMeta {
-  phase: "05";
+  phase: "06";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
   authorizedTranscriptIngest: true;
   durableJobs: true;
+  chaptersAndSummaries: true;
 }

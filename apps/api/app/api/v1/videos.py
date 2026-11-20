@@ -10,7 +10,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import CsrfAuth, CurrentAuth, DbSession, SettingsDep
 from app.api.v1.schemas import (
+    ChapterListResponse,
+    ChapterOut,
     ImportNoticeOut,
+    SummarizeAccepted,
+    SummaryClaimOut,
+    SummaryExampleOut,
+    SummaryListResponse,
+    SummaryOut,
     TranscriptUploadAccepted,
     VideoImportResponse,
     VideoListResponse,
@@ -18,7 +25,10 @@ from app.api.v1.schemas import (
     YoutubeImportRequest,
 )
 from app.core.errors import not_found, raise_api_error
+from app.db.repositories import ChapterRepository, SummaryRepository
+from app.domain.summary_schemas import SummaryKind
 from app.services.access import AccessService
+from app.services.summarization import SummarizationError, SummarizationService
 from app.services.transcript_ingest import TranscriptIngestError, TranscriptIngestService
 from app.services.youtube_import import YoutubeImportService, map_youtube_error_to_http
 from app.youtube.errors import YoutubeMetadataError
@@ -190,3 +200,209 @@ async def upload_transcript(
         replay=result.replay,
     )
     return JSONResponse(status_code=202, content=body.model_dump(mode="json"))
+
+
+@router.get("/{video_id}/chapters", response_model=ChapterListResponse)
+async def list_chapters(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CurrentAuth,
+    db: DbSession,
+) -> ChapterListResponse:
+    """Return chapter refs for an owned video (empty list if not yet summarized)."""
+    access = AccessService(db)
+    video = await access.get_video_for_caller(ctx, video_id)
+    if video is None:
+        not_found(getattr(request.state, "request_id", None))
+    chapters = await ChapterRepository(db).list_for_video(
+        video_id=video_id,
+        workspace_id=ctx.workspace.id,
+    )
+    revision = chapters[0].source_revision if chapters else None
+    return ChapterListResponse(
+        items=[
+            ChapterOut(
+                id=c.id,
+                video_id=c.video_id,
+                workspace_id=c.workspace_id,
+                source_revision=c.source_revision,
+                title=c.title,
+                start_segment_id=c.start_segment_id,
+                end_segment_id=c.end_segment_id,
+                topic_json=c.topic_json,
+            )
+            for c in chapters
+        ],
+        source_revision=revision,
+    )
+
+
+@router.get("/{video_id}/summaries", response_model=SummaryListResponse)
+async def list_summaries(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CurrentAuth,
+    db: DbSession,
+    settings: SettingsDep,
+    kind: str | None = Query(default=None, max_length=32),
+    ensure: bool = Query(default=True),
+) -> SummaryListResponse:
+    """
+    Return video-scope summaries with evidence IDs.
+
+    Without a transcript, returns 422 SOURCE_TRANSCRIPT_REQUIRED (blocked state).
+    By default, generates missing summaries via the configured (fake-by-default) provider.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    access = AccessService(db)
+    video = await access.get_video_for_caller(ctx, video_id)
+    if video is None:
+        not_found(request_id)
+
+    summary_kind: SummaryKind | None = None
+    if kind:
+        try:
+            summary_kind = SummaryKind(kind.strip().lower())
+        except ValueError:
+            raise_api_error(
+                422,
+                code="INVALID_SUMMARY_KIND",
+                message="kind must be one of: short, detailed, simple, technical.",
+                request_id=request_id,
+            )
+
+    repo = SummaryRepository(db)
+    items = await repo.list_for_scope(
+        workspace_id=ctx.workspace.id,
+        scope_kind="video",
+        scope_id=video_id,
+        summary_kind=summary_kind.value if summary_kind else None,
+    )
+
+    # Prefer latest revision per kind.
+    latest: dict[str, Any] = {}
+    for row in items:
+        if row.summary_kind not in latest:
+            latest[row.summary_kind] = row
+    items = list(latest.values())
+
+    if ensure and (not items or (summary_kind and summary_kind.value not in latest)):
+        service = SummarizationService(db, settings)
+        try:
+            kinds = [summary_kind] if summary_kind else None
+            await service.summarize_video(
+                workspace_id=ctx.workspace.id,
+                video_id=video_id,
+                kinds=kinds,
+            )
+        except SummarizationError as exc:
+            raise_api_error(
+                exc.status_code,
+                code=exc.code,
+                message=exc.message,
+                request_id=request_id,
+            )
+        items = await repo.list_for_scope(
+            workspace_id=ctx.workspace.id,
+            scope_kind="video",
+            scope_id=video_id,
+            summary_kind=summary_kind.value if summary_kind else None,
+        )
+        latest = {}
+        for row in items:
+            if row.summary_kind not in latest:
+                latest[row.summary_kind] = row
+        items = list(latest.values())
+
+    blocked = any(row.status == "blocked" for row in items)
+    revision = None
+    for row in items:
+        cov = row.coverage_json or {}
+        if isinstance(cov, dict) and cov.get("source_revision") is not None:
+            revision = int(cov["source_revision"])
+            break
+
+    return SummaryListResponse(
+        items=[_summary_out(row) for row in items],
+        blocked=blocked,
+        source_revision=revision,
+    )
+
+
+@router.post("/{video_id}/summarize", response_model=SummarizeAccepted)
+async def summarize_video(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+    settings: SettingsDep,
+) -> SummarizeAccepted:
+    """Run hierarchical summarization for an owned video (fake providers by default)."""
+    request_id = getattr(request.state, "request_id", None)
+    access = AccessService(db)
+    video = await access.get_video_for_caller(ctx, video_id)
+    if video is None:
+        not_found(request_id)
+
+    service = SummarizationService(db, settings)
+    try:
+        result = await service.summarize_video(
+            workspace_id=ctx.workspace.id,
+            video_id=video_id,
+        )
+    except SummarizationError as exc:
+        raise_api_error(
+            exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            request_id=request_id,
+        )
+
+    return SummarizeAccepted(
+        video_id=video_id,
+        chapter_count=len(result.chapters),
+        summary_count=len(result.summaries),
+        cache_hits=result.cache_hits,
+        provider_calls=result.provider_calls,
+        blocked=result.blocked,
+        source_revision=result.asset.source_revision,
+    )
+
+
+def _summary_out(row: Any) -> SummaryOut:
+    content = row.content_json if isinstance(row.content_json, dict) else {}
+    claims_raw = content.get("claims") or []
+    examples_raw = content.get("examples") or []
+    return SummaryOut(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        scope_kind=row.scope_kind,
+        scope_id=row.scope_id,
+        summary_kind=row.summary_kind,
+        revision=row.revision,
+        status=row.status,
+        summary=str(content.get("summary") or ""),
+        key_points=[str(p) for p in (content.get("key_points") or [])],
+        claims=[
+            SummaryClaimOut(
+                text=str(c.get("text") or ""),
+                evidence_segment_ids=[str(i) for i in (c.get("evidence_segment_ids") or [])],
+                provenance=str(c.get("provenance") or "source_supported"),
+            )
+            for c in claims_raw
+            if isinstance(c, dict)
+        ],
+        examples=[
+            SummaryExampleOut(
+                text=str(e.get("text") or ""),
+                origin=str(e.get("origin") or "ai_generated_illustration"),
+            )
+            for e in examples_raw
+            if isinstance(e, dict)
+        ],
+        evidence_segment_ids=[str(i) for i in (content.get("evidence_segment_ids") or [])],
+        origin=str(content.get("origin")) if content.get("origin") is not None else None,
+        coverage_json=row.coverage_json,
+        provider_run_id=row.provider_run_id,
+        cache_hit=False,
+    )

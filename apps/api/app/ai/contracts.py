@@ -121,6 +121,19 @@ FAKE_GROUNDED_QA: dict[str, Any] = {
 FAKE_VIDEO_SUMMARY: dict[str, Any] = {
     "summary": "Fixture summary: active listening and clarifying questions.",
     "key_points": ["Listen actively", "Ask clarifying questions"],
+    "claims": [
+        {
+            "text": "Ask clarifying questions before you respond.",
+            "evidence_segment_ids": ["seg_fixture_01"],
+            "provenance": "source_supported",
+        }
+    ],
+    "examples": [
+        {
+            "text": "In a code review, restate the requirement in your own words.",
+            "origin": "ai_generated_illustration",
+        }
+    ],
     "evidence_segment_ids": ["seg_fixture_01"],
     "origin": "fixture_data",
 }

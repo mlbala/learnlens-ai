@@ -265,6 +265,24 @@ class TranscriptIngestService:
                 result_resource_id=asset.id,
                 clear_error=True,
             )
+            # Best-effort hierarchical summaries (phase 06). Failures must not
+            # roll back a successful transcript ingest.
+            try:
+                from app.services.summarization import SummarizationService
+
+                await SummarizationService(self._session, self._settings).summarize_video(
+                    workspace_id=asset.workspace_id,
+                    video_id=asset.video_id,
+                )
+            except Exception as summary_exc:  # noqa: BLE001
+                logger.warning(
+                    "post_transcript_summarize_failed",
+                    extra={
+                        "job_id": str(job.id),
+                        "video_id": str(asset.video_id),
+                        "error_type": type(summary_exc).__name__,
+                    },
+                )
             return job
         except Exception as exc:  # noqa: BLE001 — map + bounded retry
             return await self._handle_failure(job, exc, max_attempts=max_attempts)

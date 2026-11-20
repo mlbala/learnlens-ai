@@ -2,6 +2,11 @@ from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentR
 from app.db.repositories.jobs import IngestionJobRepository
 from app.db.repositories.playlists import PlaylistRepository
 from app.db.repositories.sessions import SessionRepository
+from app.db.repositories.summaries import (
+    ChapterRepository,
+    ProviderRunRepository,
+    SummaryRepository,
+)
 from app.db.repositories.users import UserRepository
 from app.db.repositories.videos import VideoRepository
 from app.db.repositories.workspaces import WorkspaceRepository
@@ -15,4 +20,7 @@ __all__ = [
     "IngestionJobRepository",
     "SourceAssetRepository",
     "TranscriptSegmentRepository",
+    "ChapterRepository",
+    "ProviderRunRepository",
+    "SummaryRepository",
 ]
