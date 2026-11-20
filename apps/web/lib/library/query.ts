@@ -19,6 +19,7 @@ export const libraryKeys = {
   playlists: (filters: { q?: string }) =>
     [...libraryKeys.all, "playlists", filters] as const,
   playlist: (id: string) => [...libraryKeys.all, "playlist", id] as const,
+  playlistCourse: (id: string) => [...libraryKeys.all, "playlist-course", id] as const,
   job: (id: string) => [...libraryKeys.all, "job", id] as const,
 };
 
@@ -72,6 +73,27 @@ export function usePlaylist(playlistId: string) {
     queryKey: libraryKeys.playlist(playlistId),
     queryFn: () => client.getPlaylist(playlistId),
     enabled: Boolean(playlistId),
+  });
+}
+
+export function usePlaylistCourseSummary(playlistId: string) {
+  const client = getLibraryClient();
+  return useQuery({
+    queryKey: libraryKeys.playlistCourse(playlistId),
+    queryFn: () => client.getPlaylistCourseSummary(playlistId),
+    enabled: Boolean(playlistId),
+  });
+}
+
+export function useSynthesizePlaylist() {
+  const client = getLibraryClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (playlistId: string) => client.synthesizePlaylist(playlistId),
+    onSuccess: async (_data, playlistId) => {
+      await qc.invalidateQueries({ queryKey: libraryKeys.playlistCourse(playlistId) });
+      await qc.invalidateQueries({ queryKey: libraryKeys.playlist(playlistId) });
+    },
   });
 }
 

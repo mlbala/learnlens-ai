@@ -1,4 +1,4 @@
-"""Celery tasks for transcript ingestion jobs."""
+"""Celery tasks for transcript ingestion and playlist synthesis jobs."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import uuid
 
 from app.core.settings import clear_settings_cache, get_settings
 from app.db.session import create_engine, create_session_factory
+from app.services.playlist_synthesis import PlaylistSynthesisService
 from app.services.transcript_ingest import TranscriptIngestService
 from app.workers.celery_app import celery_app
 
@@ -37,6 +38,24 @@ async def _process_job_async(job_id: uuid.UUID) -> str:
         await engine.dispose()
 
 
+async def _process_playlist_synthesis_async(job_id: uuid.UUID) -> str:
+    clear_settings_cache()
+    settings = get_settings()
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as session:
+            from app.db.repositories import IngestionJobRepository
+
+            service = PlaylistSynthesisService(session, settings)
+            await service.process_job(job_id)
+            job = await IngestionJobRepository(session).get_by_id(job_id)
+            await session.commit()
+            return job.status if job else "unknown"
+    finally:
+        await engine.dispose()
+
+
 @celery_app.task(
     name="app.workers.tasks.process_transcript_job",
     bind=True,
@@ -48,6 +67,22 @@ def process_transcript_job(self, job_id: str) -> dict[str, str]:  # noqa: ARG001
     status = asyncio.run(_process_job_async(uuid.UUID(job_id)))
     logger.info(
         "transcript_job_finish",
+        extra={"job_id": job_id, "status": status},
+    )
+    return {"job_id": job_id, "status": status}
+
+
+@celery_app.task(
+    name="app.workers.tasks.process_playlist_synthesis_job",
+    bind=True,
+    max_retries=0,
+)
+def process_playlist_synthesis_job(self, job_id: str) -> dict[str, str]:  # noqa: ARG001
+    """Process playlist course synthesis. Never logs raw transcript content."""
+    logger.info("playlist_synthesis_job_start", extra={"job_id": job_id})
+    status = asyncio.run(_process_playlist_synthesis_async(uuid.UUID(job_id)))
+    logger.info(
+        "playlist_synthesis_job_finish",
         extra={"job_id": job_id, "status": status},
     )
     return {"job_id": job_id, "status": status}

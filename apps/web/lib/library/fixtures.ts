@@ -7,6 +7,7 @@ import { normalizeCoverage } from "@/lib/library/coverage";
 import type {
   DashboardStats,
   JobRecord,
+  PlaylistCourseSummary,
   PlaylistRecord,
   PlaylistSummary,
   VideoRecord,
@@ -218,6 +219,81 @@ export function fixturePlaylistSummary(): PlaylistSummary {
     total_items: FIXTURE_PLAYLIST.total_items,
     channel_title: FIXTURE_PLAYLIST.channel_title,
     coverage: FIXTURE_PLAYLIST.coverage,
+    fixture_data: true,
+  };
+}
+
+/** Partial 3/6 course synthesis fixture — never invents missing lessons. */
+export function fixturePlaylistCourseSummary(
+  playlistId: string = FIXTURE_PLAYLIST.id,
+): PlaylistCourseSummary {
+  const readyIds = FIXTURE_PLAYLIST.items
+    .filter((i) => i.state === "ready" && i.video_id)
+    .map((i) => i.video_id as string);
+  const excludedIds = FIXTURE_PLAYLIST.items
+    .filter((i) => i.state !== "ready")
+    .map((i) => i.video_id || i.id);
+  const included = readyIds.slice(0, 3);
+  const total = FIXTURE_PLAYLIST.total_items;
+  return {
+    id: "44444444-4444-4444-8444-444444444401",
+    workspace_id: WS,
+    playlist_id: playlistId,
+    summary_kind: "course",
+    status: "ready",
+    coverage_label: "partial",
+    coverage_ratio: included.length / total,
+    included_count: included.length,
+    excluded_count: total - included.length,
+    total_count: total,
+    included_video_ids: included,
+    excluded_video_ids: excludedIds,
+    source_revisions: Object.fromEntries(included.map((id) => [id, 1])),
+    caveat: `Summary covers ${included.length} of ${total} videos`,
+    overview:
+      "Fixture course overview based on ready lessons with permitted transcripts. Missing lessons are listed as excluded and are not invented.",
+    topic_modules: [
+      {
+        title: "Fixture module: Communication foundations",
+        summary: "Active listening and clarifying questions across included fixture lectures.",
+        video_ids: included,
+        evidence_segment_ids: ["seg-fixture-01"],
+      },
+    ],
+    learning_map: included.map((id, order) => ({
+      label: `Fixture lesson ${order + 1}`,
+      video_ids: [id],
+      order,
+    })),
+    cross_video_concepts: [
+      {
+        name: "Clarifying questions",
+        description: "Fixture cross-video concept grounded in included ready lessons only.",
+        video_ids: included,
+        evidence_segment_ids: ["seg-fixture-01"],
+      },
+    ],
+    redundant_topics:
+      included.length >= 2
+        ? [
+            {
+              topic: "Active listening",
+              video_ids: included.slice(0, 2),
+              note: "Repeated across ready fixture lectures.",
+            },
+          ]
+        : [],
+    key_takeaways: [
+      {
+        text: "Ask clarifying questions before you respond.",
+        source_video_ids: included.slice(0, 1),
+        evidence_segment_ids: ["seg-fixture-01"],
+        provenance: "source_supported",
+      },
+    ],
+    origin: "fixture_data",
+    cache_hit: true,
+    video_cache_hits: included.length,
     fixture_data: true,
   };
 }

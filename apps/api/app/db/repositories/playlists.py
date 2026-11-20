@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Playlist, PlaylistItem
@@ -108,3 +108,16 @@ class PlaylistRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def mark_items_ready_for_video(self, *, video_id: uuid.UUID) -> int:
+        """Flip playlist membership to ready after a permitted transcript lands."""
+        result = await self._session.execute(
+            update(PlaylistItem)
+            .where(
+                PlaylistItem.video_id == video_id,
+                PlaylistItem.state.in_(["needs_transcript", "pending", "queued", "processing"]),
+            )
+            .values(state="ready")
+        )
+        await self._session.flush()
+        return int(result.rowcount or 0)
