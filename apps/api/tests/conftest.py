@@ -60,8 +60,9 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("AI_MEDIA_PROVIDER", "fake")
     monkeypatch.setenv("USAGE_DAILY_MEDIA_JOBS", "100")
     clear_settings_cache()
-    configure_auth_rate_limiter(limit=100, window_seconds=60.0)
-    configure_api_rate_limiter(limit=1000, window_seconds=60.0)
+    # Fresh high limits per test so suite growth (e.g. tutor) does not trip process limiter.
+    configure_auth_rate_limiter(limit=500, window_seconds=60.0)
+    configure_api_rate_limiter(limit=5000, window_seconds=60.0)
     configure_usage_policy(
         daily_chat_messages=1000,
         daily_transcript_jobs=1000,

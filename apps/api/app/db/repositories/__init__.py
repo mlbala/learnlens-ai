@@ -15,6 +15,16 @@ from app.db.repositories.summaries import (
     ProviderRunRepository,
     SummaryRepository,
 )
+from app.db.repositories.tutor import (
+    ConceptEdgeRepository,
+    ConceptRepository,
+    LearnerProgressRepository,
+    QuizAttemptRepository,
+    ReviewScheduleRepository,
+    StudyDeckRepository,
+    StudyItemRepository,
+    TutorPreferenceRepository,
+)
 from app.db.repositories.usage import UsageLimitRepository
 from app.db.repositories.users import UserRepository
 from app.db.repositories.videos import VideoRepository
@@ -40,4 +50,12 @@ __all__ = [
     "UsageLimitRepository",
     "MediaAssetRepository",
     "MediaFrameRepository",
+    "ConceptRepository",
+    "ConceptEdgeRepository",
+    "StudyDeckRepository",
+    "StudyItemRepository",
+    "QuizAttemptRepository",
+    "ReviewScheduleRepository",
+    "LearnerProgressRepository",
+    "TutorPreferenceRepository",
 ]

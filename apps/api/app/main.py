@@ -16,6 +16,7 @@ from app.api.v1 import (
     me_router,
     playlists_router,
     settings_providers_router,
+    tutor_router,
     usage_router,
     videos_router,
 )
@@ -126,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(playlists_router)
     app.include_router(jobs_router)
     app.include_router(chat_router)
+    app.include_router(tutor_router)
     app.include_router(settings_providers_router)
     app.include_router(usage_router)
     return app

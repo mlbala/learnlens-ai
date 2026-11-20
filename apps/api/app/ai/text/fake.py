@@ -107,6 +107,9 @@ class FakeTextAdapter:
         }:
             return _summary_fixture(evidence_ids)
 
+        if purpose == "tutor_quiz":
+            return _tutor_quiz_fixture(evidence_ids, request)
+
         # Generic fixture — still marked as fixture data, not YouTube content.
         return {
             "result": "fixture_data",
@@ -226,4 +229,79 @@ def _playlist_summary_fixture(evidence: list[dict[str, Any]]) -> dict[str, Any]:
         "redundant_topics": redundant,
         "key_takeaways": takeaways,
         "origin": "fixture_data",
+    }
+
+
+def _tutor_quiz_fixture(
+    evidence_ids: list[str], request: ModelRequest
+) -> dict[str, Any]:
+    """Deterministic practice deck — fixture_data, cites only packet evidence IDs."""
+    eid = evidence_ids[0] if evidence_ids else "seg_fixture_01"
+    eid2 = evidence_ids[1] if len(evidence_ids) > 1 else eid
+    wants_ta = "ta" in (request.user_input or "").lower() or "tamil" in (
+        request.instructions or ""
+    ).lower()
+    presentation = {
+        "en": {
+            "prompt": "What should you do before coding?",
+            "answer": "Clarify requirements.",
+            "explanation": "Ask clarifying questions first.",
+        }
+    }
+    if wants_ta:
+        presentation["ta"] = {
+            "prompt": "கோடிங் செய்வதற்கு முன் என்ன செய்ய வேண்டும்?",
+            "answer": "தேவைகளை தெளிவுபடுத்துங்கள்.",
+            "explanation": "முதலில் தெளிவுபடுத்தும் கேள்விகளை கேளுங்கள்.",
+        }
+    return {
+        "title": "Fixture practice deck (synthetic)",
+        "origin": "fixture_data",
+        "concepts": [
+            {
+                "name": "Active listening",
+                "description": "Fixture concept: attend and reflect before responding.",
+                "evidence_segment_ids": [eid],
+                "prerequisites": [],
+            },
+            {
+                "name": "Clarifying questions",
+                "description": "Fixture concept: ask before coding.",
+                "evidence_segment_ids": [eid2],
+                "prerequisites": ["Active listening"],
+            },
+        ],
+        "items": [
+            {
+                "item_kind": "flashcard",
+                "prompt": "What should you do before coding?",
+                "answer": "Clarify requirements.",
+                "explanation": "Ask clarifying questions first.",
+                "explanation_origin": "source_supported",
+                "choices": [],
+                "correct_choice_index": None,
+                "evidence_segment_ids": [eid],
+                "concept_name": "Clarifying questions",
+                "presentation": presentation,
+            },
+            {
+                "item_kind": "quiz",
+                "prompt": "Which action is recommended first?",
+                "answer": "Ask clarifying questions.",
+                "explanation": (
+                    "Like checking a recipe before cooking — an AI illustration."
+                ),
+                "explanation_origin": "ai_generated_illustration",
+                "choices": [
+                    "Ask clarifying questions.",
+                    "Ship immediately.",
+                    "Ignore the transcript.",
+                    "Invent timestamps.",
+                ],
+                "correct_choice_index": 0,
+                "evidence_segment_ids": [eid2],
+                "concept_name": "Clarifying questions",
+                "presentation": presentation,
+            },
+        ],
     }

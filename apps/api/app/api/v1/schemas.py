@@ -503,3 +503,155 @@ class PlaylistCourseSummaryOut(BaseModel):
     cache_hit: bool = False
     video_cache_hits: int = 0
     provider_run_id: uuid.UUID | None = None
+
+
+# --- Tutor / quiz / spaced review (phase 18) ---
+
+
+class GenerateTutorDeckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    video_id: uuid.UUID
+    presentation_language: str | None = Field(
+        default=None, pattern="^(en|ta)$"
+    )
+
+
+class TutorEvidenceOut(BaseModel):
+    segment_id: uuid.UUID
+    snippet: str
+    start_ms: int | None = None
+    end_ms: int | None = None
+    youtube_url: str | None = None
+    timing_verified: bool = False
+
+
+class StudyItemOut(BaseModel):
+    id: uuid.UUID
+    deck_id: uuid.UUID
+    item_kind: str
+    ordinal: int
+    prompt: str
+    answer: str
+    explanation: str
+    explanation_origin: str
+    choices: list[str] = Field(default_factory=list)
+    correct_choice_index: int | None = None
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+    evidence: list[TutorEvidenceOut] = Field(default_factory=list)
+    presentation: dict[str, Any] = Field(default_factory=dict)
+    concept_id: uuid.UUID | None = None
+
+
+class ConceptOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    video_id: uuid.UUID | None = None
+    canonical_name: str
+    description: str
+    evidence_segment_ids: list[str] = Field(default_factory=list)
+
+
+class ConceptEdgeOut(BaseModel):
+    id: uuid.UUID
+    src_concept_id: uuid.UUID
+    dst_concept_id: uuid.UUID
+    relation: str
+    evidence_span_id: uuid.UUID | None = None
+
+
+class StudyDeckOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    user_id: uuid.UUID
+    video_id: uuid.UUID
+    title: str
+    presentation_language: str
+    source_revision: int
+    status: str
+    origin: str
+    items: list[StudyItemOut] = Field(default_factory=list)
+    concepts: list[ConceptOut] = Field(default_factory=list)
+    concept_edges: list[ConceptEdgeOut] = Field(default_factory=list)
+    disclaimer: str
+    created_at: datetime
+
+
+class StudyDeckListResponse(BaseModel):
+    items: list[StudyDeckOut]
+    disclaimer: str
+
+
+class QuizAttemptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: uuid.UUID
+    selected_choice_index: int | None = None
+    response_text: str | None = Field(default=None, max_length=4000)
+
+
+class QuizAttemptOut(BaseModel):
+    id: uuid.UUID
+    deck_id: uuid.UUID
+    item_id: uuid.UUID
+    is_correct: bool
+    evidence_resolved: bool
+    evidence: list[TutorEvidenceOut] = Field(default_factory=list)
+    explanation: str
+    explanation_origin: str
+    correct_choice_index: int | None = None
+    created_at: datetime
+
+
+class ReviewSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grade: str = Field(pattern="^(again|hard|good|easy)$")
+
+
+class ReviewItemOut(BaseModel):
+    schedule_id: uuid.UUID
+    item: StudyItemOut
+    due_at: datetime
+    interval_days: float
+    ease_factor: float
+    repetitions: int
+    last_result: str | None = None
+
+
+class ReviewListResponse(BaseModel):
+    items: list[ReviewItemOut]
+    disclaimer: str
+
+
+class LearnerProgressOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    user_id: uuid.UUID
+    video_id: uuid.UUID | None = None
+    deck_id: uuid.UUID | None = None
+    items_seen: int
+    items_correct: int
+    reviews_completed: int
+    last_activity_at: datetime | None = None
+    disclaimer: str
+
+
+class LearnerProgressListResponse(BaseModel):
+    items: list[LearnerProgressOut]
+    disclaimer: str
+
+
+class ConceptGraphResponse(BaseModel):
+    concepts: list[ConceptOut]
+    edges: list[ConceptEdgeOut]
+
+
+class TutorPreferencesOut(BaseModel):
+    presentation_language: str
+
+
+class TutorPreferencesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    presentation_language: str = Field(pattern="^(en|ta)$")

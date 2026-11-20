@@ -96,6 +96,16 @@ Do not include stack traces or provider error bodies in public errors. All prote
 | PUT | `/settings/providers` | chosen text provider/model & embedding profile | selected provider; reindex warning if embedding changes |
 | GET | `/usage` | period | counts, estimated cost, quotas |
 | DELETE | `/videos/{video_id}` | CSRF and ownership | scheduled deletion |
+| POST | `/tutor/decks` | video_id, optional presentation_language (`en`\|`ta`) | source-grounded flashcard/quiz deck with citations |
+| GET | `/tutor/decks` | optional video_id | user-owned decks in workspace |
+| GET | `/tutor/decks/{deck_id}` | none | deck + items + evidence + concept edges |
+| DELETE | `/tutor/decks/{deck_id}` | CSRF | delete user-owned generated practice content |
+| POST | `/tutor/decks/{deck_id}/attempts` | item_id, selected_choice_index / response_text | graded attempt; evidence resolved from DB |
+| GET | `/tutor/review` | limit | due spaced-review items for current user |
+| POST | `/tutor/review/{item_id}` | grade (`again`\|`hard`\|`good`\|`easy`) | advance SM-2-lite schedule |
+| GET | `/tutor/progress` | none | per-user practice counts (no efficacy claims) |
+| GET | `/tutor/concepts` | optional video_id | concept nodes + prerequisite edges (Postgres) |
+| GET/PUT | `/tutor/preferences` | presentation_language | en/ta presentation; evidence stays original language |
 
 Authentication and CRUD endpoints require further OpenAPI-generated documentation during implementation. Use explicit 400/401/403/404/409/413/422/429/503 statuses.
 

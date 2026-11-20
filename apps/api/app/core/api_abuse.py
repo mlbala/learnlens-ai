@@ -9,7 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.core.errors import error_body
-from app.core.rate_limit import api_rate_limiter
+from app.core import rate_limit as rate_limit_mod
 from app.core.settings import Settings
 
 _EXEMPT_PREFIXES = ("/health",)
@@ -29,7 +29,8 @@ class ApiAbuseMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client = request.client.host if request.client else "unknown"
-        if not api_rate_limiter.allow(f"api:{client}"):
+        # Look up module attribute so configure_api_rate_limiter() takes effect.
+        if not rate_limit_mod.api_rate_limiter.allow(f"api:{client}"):
             request_id = getattr(request.state, "request_id", None)
             return JSONResponse(
                 status_code=429,

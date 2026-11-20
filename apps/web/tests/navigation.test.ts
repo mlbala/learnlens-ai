@@ -14,6 +14,7 @@ describe("PRIMARY_NAV", () => {
       "My Library",
       "Playlists",
       "Videos",
+      "Practice",
       "Recent Learning",
       "Settings",
     ]);

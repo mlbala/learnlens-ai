@@ -205,8 +205,52 @@ export interface ChatMessageContract {
   provider_run_id?: string | null;
 }
 
+export type PresentationLanguage = "en" | "ta";
+
+export type StudyItemKind = "flashcard" | "quiz";
+
+export interface TutorEvidenceContract {
+  segment_id: string;
+  snippet: string;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  youtube_url?: string | null;
+  timing_verified: boolean;
+}
+
+export interface StudyItemContract {
+  id: string;
+  deck_id: string;
+  item_kind: StudyItemKind | string;
+  ordinal: number;
+  prompt: string;
+  answer: string;
+  explanation: string;
+  explanation_origin: Provenance | string;
+  choices: string[];
+  correct_choice_index?: number | null;
+  evidence_segment_ids: string[];
+  evidence: TutorEvidenceContract[];
+  presentation?: Record<string, { prompt?: string; answer?: string; explanation?: string }>;
+  concept_id?: string | null;
+}
+
+export interface StudyDeckContract {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  video_id: string;
+  title: string;
+  presentation_language: PresentationLanguage | string;
+  source_revision: number;
+  status: string;
+  origin: string;
+  items: StudyItemContract[];
+  disclaimer: string;
+}
+
 export interface ScaffoldMeta {
-  phase: "12";
+  phase: "18";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
   authorizedTranscriptIngest: true;
@@ -216,6 +260,7 @@ export interface ScaffoldMeta {
   libraryScreens: true;
   lessonReaderAndChat: true;
   playlistSynthesis: true;
+  tutorQuizGraph: true;
 }
 
 export interface PlaylistCoverageContract {

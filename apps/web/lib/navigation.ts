@@ -16,6 +16,7 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { id: "library", label: "My Library", href: "/library" },
   { id: "playlists", label: "Playlists", href: "/playlists" },
   { id: "videos", label: "Videos", href: "/videos" },
+  { id: "practice", label: "Practice", href: "/practice" },
   { id: "recent", label: "Recent Learning", href: "/recent", placeholder: true },
   { id: "settings", label: "Settings", href: "/settings" },
 ] as const;
@@ -48,6 +49,9 @@ export function breadcrumbForPath(pathname: string): { label: string; href?: str
   }
   if (pathname === "/import") {
     return [{ label: "Home", href: "/" }, { label: "Import source" }];
+  }
+  if (pathname === "/practice") {
+    return [{ label: "Home", href: "/" }, { label: "Practice" }];
   }
   const videoMatch = pathname.match(/^\/videos\/([^/]+)$/);
   if (videoMatch) {

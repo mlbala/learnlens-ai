@@ -72,7 +72,7 @@ Compose and Dockerfiles probe `/health/live` (API) and `/` (web).
 - Live Neon `usage_limits` / audit migrations may not have been applied in every environment — run `make migrate` with real credentials.
 - UsagePolicy process-local counters are not multi-replica safe; workspace Neon caps are the durable control.
 - npm/pip audit findings may exist as warnings — review before public launch.
-- Optional phases 17–18 (visual understanding, tutor/quiz) are **not** implemented.
+- Optional phase 17 (visual understanding) and 18 (tutor/quiz) are implemented offline with fake providers; live Neon migrate + paid providers remain operator-gated.
 - No automatic CDN/WAF/TLS termination in Compose — put a reverse proxy in front for real production.
 - Cost estimates are placeholders (`estimate_version=v0-placeholder-not-live-rates`).
 - Legal review of privacy/copyright text is still required before public launch (see `infra/deploy/PRIVACY_AND_COMPLIANCE.md`).

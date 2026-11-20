@@ -9,6 +9,16 @@ from app.db.models.library import Playlist, PlaylistItem, Video
 from app.db.models.media import MediaAsset, MediaFrame
 from app.db.models.summaries import ProviderRun, Summary
 from app.db.models.transcript import Chapter, SourceAsset, TranscriptSegment
+from app.db.models.tutor import (
+    Concept,
+    ConceptEdge,
+    LearnerProgress,
+    QuizAttempt,
+    ReviewSchedule,
+    StudyDeck,
+    StudyItem,
+    TutorPreference,
+)
 from app.db.models.usage import UsageLimit
 
 __all__ = [
@@ -34,4 +44,12 @@ __all__ = [
     "UsageLimit",
     "MediaAsset",
     "MediaFrame",
+    "Concept",
+    "ConceptEdge",
+    "StudyDeck",
+    "StudyItem",
+    "QuizAttempt",
+    "ReviewSchedule",
+    "LearnerProgress",
+    "TutorPreference",
 ]
