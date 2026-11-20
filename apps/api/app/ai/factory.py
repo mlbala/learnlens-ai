@@ -71,6 +71,7 @@ def build_text_model(settings: Settings, *, guard: bool = True) -> TextModel:
     return GuardedTextModel(
         inner,
         max_input_characters=settings.ai_max_input_characters,
+        max_regen_loops=settings.ai_guardrails_max_regen_loops,
     )
 
 

@@ -20,8 +20,11 @@ class EvalTargets(BaseModel):
 
     dataset_version: str
     note: str = ""
+    fixture_data: bool = True
     hard_gates: dict[str, Any]
     soft_targets: dict[str, float]
+    # Calibrated offline gates — failing these fails `make eval` (docs/05 launch goals).
+    regression_gates: dict[str, float] = Field(default_factory=dict)
 
 
 class EvalCase(BaseModel):

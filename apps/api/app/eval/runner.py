@@ -1,4 +1,4 @@
-"""Orchestrate offline golden evaluation and hard/soft gates."""
+"""Orchestrate offline golden evaluation and hard/soft/regression gates."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from app.eval.baselines import (
     simulate_grounded_answer,
 )
 from app.eval.dataset import DatasetSchemaError, GoldenDataset, load_golden_dataset
+from app.eval.metrics import hybrid_mrr_lift
 from app.eval.paths import default_report_dir, golden_root
 from app.eval.report import write_json_report, write_markdown_report
 
@@ -60,10 +61,14 @@ def run_eval(
     abstention_hits = 0
     abstention_total = 0
     completeness_scores: list[float] = []
+    attribution_scores: list[float] = []
     citation_case_pass = 0
     citation_case_total = 0
     leaked_tenant_count = 0
     fabricated_timestamp_links = 0
+    exfil_failures = 0
+    playlist_coverage_pass = 0
+    playlist_coverage_total = 0
     summary_naive: dict[str, float] | None = None
     summary_hier: dict[str, float] | None = None
 
@@ -93,6 +98,11 @@ def run_eval(
                 ok = abs(ratio - expected) < 1e-6 and set(missing) == set(
                     case.get("excluded_video_keys") or []
                 )
+                playlist_coverage_total += 1
+                if ok:
+                    playlist_coverage_pass += 1
+                else:
+                    gate_failures.append(f"playlist_coverage:{case['id']}")
                 case_rows.append(
                     {
                         "id": case["id"],
@@ -102,8 +112,6 @@ def run_eval(
                         "pass": ok,
                     }
                 )
-                if not ok:
-                    gate_failures.append(f"playlist_coverage:{case['id']}")
                 continue
 
             if case_type == "summary":
@@ -122,7 +130,6 @@ def run_eval(
                     "estimated_cost_usd": hier.estimated_cost_usd,
                     "dropped_citation_ids": len(hier.dropped_citation_ids),
                 }
-                # Fabricated citation must be dropped (hard citation validity).
                 citation_case_total += 1
                 if hier.dropped_citation_ids:
                     citation_case_pass += 1
@@ -168,10 +175,13 @@ def run_eval(
             latency_hybrid.append(hybrid.latency_ms)
             latency_dense.append(dense.latency_ms)
 
-            # Prefer hybrid retrieval packet for grounded answer simulation.
             qa = simulate_grounded_answer(dataset, case, hybrid.retrieved_segment_ids)
             leaked_tenant_count += int(qa["leaked_tenant_count"])
             fabricated_timestamp_links += int(qa["fabricated_timestamp_links"])
+
+            if case.get("must_not_exfiltrate") and not qa.get("exfil_blocked", True):
+                exfil_failures += 1
+                gate_failures.append(f"adversarial_exfil:{case['id']}")
 
             if case.get("should_abstain"):
                 abstention_total += 1
@@ -179,8 +189,9 @@ def run_eval(
                     abstention_hits += 1
 
             completeness_scores.append(float(qa["answer_completeness"]))
+            if not case.get("should_abstain"):
+                attribution_scores.append(float(qa.get("attribution_precision") or 0.0))
 
-            # Citation hard gate: every kept citation must be in packet; fabricated must drop.
             citation_case_total += 1
             cited_ok = all(
                 sid in set(hybrid.retrieved_segment_ids) or case.get("should_abstain")
@@ -234,6 +245,8 @@ def run_eval(
                         "cited_segment_ids": qa["cited_segment_ids"],
                         "dropped_citation_ids": qa["dropped_citation_ids"],
                         "answer_completeness": qa["answer_completeness"],
+                        "attribution_precision": qa.get("attribution_precision"),
+                        "exfil_blocked": qa.get("exfil_blocked"),
                         "citation_links": qa["citation_links"],
                     },
                 }
@@ -241,6 +254,11 @@ def run_eval(
 
     citation_validity = (
         1.0 if citation_case_total == 0 else citation_case_pass / citation_case_total
+    )
+    playlist_coverage_accuracy = (
+        1.0
+        if playlist_coverage_total == 0
+        else playlist_coverage_pass / playlist_coverage_total
     )
     hard = {
         "citation_validity": {
@@ -258,6 +276,16 @@ def run_eval(
             "threshold": 0,
             "pass": fabricated_timestamp_links == 0,
         },
+        "adversarial_exfil_blocked": {
+            "value": exfil_failures,
+            "threshold": 0,
+            "pass": exfil_failures == 0,
+        },
+        "playlist_coverage_accuracy": {
+            "value": playlist_coverage_accuracy,
+            "threshold": 1.0,
+            "pass": playlist_coverage_accuracy >= 1.0,
+        },
         "schema_valid": {
             "value": schema_valid,
             "threshold": True,
@@ -269,15 +297,22 @@ def run_eval(
             gate_failures.append(f"{name}={row['value']}")
 
     soft_targets = dataset.targets.soft_targets if dataset else {}
+    regression_targets = dataset.targets.regression_gates if dataset else {}
+    hybrid_recall = _mean(retrieval_hybrid)
+    hybrid_mrr = _mean(mrr_hybrid)
+    dense_mrr = _mean(mrr_dense)
     soft_actual = {
-        "retrieval_recall_at_10": _mean(retrieval_hybrid),
-        "retrieval_mrr": _mean(mrr_hybrid),
+        "retrieval_recall_at_10": hybrid_recall,
+        "retrieval_mrr": hybrid_mrr,
         "abstention_accuracy": (
             1.0 if abstention_total == 0 else abstention_hits / abstention_total
         ),
         "summarization_faithfulness": (summary_hier or {}).get("faithfulness", 0.0),
         "summarization_coverage": (summary_hier or {}).get("coverage", 0.0),
         "answer_completeness": _mean(completeness_scores),
+        "attribution_precision": _mean(attribution_scores),
+        "hybrid_mrr_lift": hybrid_mrr_lift(hybrid_mrr=hybrid_mrr, dense_mrr=dense_mrr),
+        "playlist_coverage_accuracy": playlist_coverage_accuracy,
     }
     soft_metrics = {
         name: {
@@ -290,15 +325,45 @@ def run_eval(
         for name, actual in soft_actual.items()
     }
 
-    passed = schema_valid and not gate_failures and all(row["pass"] for row in hard.values())
+    regression_gates: dict[str, Any] = {}
+    for name, threshold in regression_targets.items():
+        actual = float(soft_actual.get(name, 0.0))
+        ok = actual >= float(threshold)
+        regression_gates[name] = {
+            "actual": round(actual, 4),
+            "threshold": float(threshold),
+            "pass": ok,
+        }
+        if not ok:
+            gate_failures.append(f"regression:{name}={actual}<{threshold}")
+
+    scorecard = {
+        "cases": len(case_rows),
+        "hard_pass": all(row["pass"] for row in hard.values()),
+        "regression_pass": all(row["pass"] for row in regression_gates.values())
+        if regression_gates
+        else True,
+        "soft_met_count": sum(1 for row in soft_metrics.values() if row.get("meets_target")),
+        "soft_total": len(soft_metrics),
+        "hybrid_beats_dense_mrr": soft_actual["hybrid_mrr_lift"] >= 0.0,
+    }
+
+    passed = (
+        schema_valid
+        and not gate_failures
+        and all(row["pass"] for row in hard.values())
+        and all(row["pass"] for row in regression_gates.values())
+    )
     payload: dict[str, Any] = {
         "dataset_version": dataset.dataset_version if dataset else None,
         "fixture_data": True,
         "dataset_root": str(golden_root(dataset_root)),
         "generated_at": datetime.now(UTC).isoformat(),
         "passed": passed,
+        "scorecard": scorecard,
         "hard_gates": {"details": hard, "schema_valid": schema_valid},
         "soft_metrics": soft_metrics,
+        "regression_gates": regression_gates,
         "baselines": {
             "retrieval": {
                 "hybrid": {
@@ -311,6 +376,7 @@ def run_eval(
                     "mrr": round(_mean(mrr_dense), 4),
                     "latency_ms_mean": round(_mean(latency_dense), 4),
                 },
+                "hybrid_mrr_lift": round(float(soft_actual["hybrid_mrr_lift"]), 4),
             },
             "summarization": {
                 "naive": summary_naive or {},
@@ -320,8 +386,10 @@ def run_eval(
         "case_results": case_rows,
         "gate_failures": gate_failures,
         "notes": [
-            "Soft quality metrics are initial targets from docs/05, not production claims.",
-            "Hard gates fail on leaks, fabricated timestamps, schema, citation validity.",
+            "Soft metrics are tracked; regression_gates are calibrated offline fail-closed gates.",
+            "Hard gates: leaks, fabricated timestamps, schema, citation validity, "
+            "playlist coverage, adversarial exfil.",
+            "Attribution precision is a lexical proxy — not human entailment.",
             "Providers: FakeEmbeddingAdapter + InMemoryVectorStore only (no paid API calls).",
         ],
     }

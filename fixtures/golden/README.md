@@ -34,4 +34,4 @@ make eval
 # or: uv run --project apps/api python -m app.eval.cli
 ```
 
-Hard CI gates: zero cross-tenant leaks, zero fabricated timestamp links, schema-valid report, citation validity on gated cases. Soft quality metrics are reported against `targets.json` until calibrated.
+Hard CI gates: zero cross-tenant leaks, zero fabricated timestamp links, schema-valid report, citation validity, playlist coverage, adversarial exfil blocked. Soft metrics are tracked; `regression_gates` in `targets.json` are calibrated offline fail-closed gates. Full suite: `make eval` (RAG + tutor + guardrails).

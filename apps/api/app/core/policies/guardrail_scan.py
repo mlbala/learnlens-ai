@@ -151,7 +151,9 @@ class StructuredInjectionScanner:
                     break
 
         score = min(score, 1.0)
-        if channel == ScanChannel.USER_DIRECT and score >= 0.7:
+        # Direct user jailbreaks and unsafe model drafts hard-block;
+        # untrusted evidence only quarantines (never elevates to instructions).
+        if channel in {ScanChannel.USER_DIRECT, ScanChannel.MODEL_OUTPUT} and score >= 0.7:
             verdict = ScanVerdict.BLOCK
         elif score >= 0.35:
             verdict = ScanVerdict.QUARANTINE

@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON_VERSION ?= 3.12
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help sync format lint typecheck test test-integration guardrails eval smoke smoke-e2e provider-smoke licenses dev migrate down clean check-tools docker-build docker-up docker-prod-config audit
+.PHONY: help sync format lint typecheck test test-integration guardrails guardrails-harness eval eval-rag smoke smoke-e2e provider-smoke licenses dev migrate down clean check-tools docker-build docker-up docker-prod-config audit
 
 help: ## Show available targets
 	@echo "LearnLens AI — make targets"
@@ -60,19 +60,28 @@ guardrails: sync ## AI/chat guardrails + security gate (fake providers only)
 	@$(UV) run --project apps/api pytest \
 		apps/api/tests/test_ai_guardrails.py \
 		apps/api/tests/test_guardrail_framework.py \
+		apps/api/tests/test_guardrails_harness.py \
 		apps/api/tests/test_security_gate.py \
 		apps/api/tests/test_grounded_qa.py \
 		apps/api/tests/test_qa_evidence.py \
 		apps/api/tests/test_tenant_isolation.py \
 		-m "not integration" -q
+	@$(MAKE) guardrails-harness
 	@npm run test --workspace=@learnlens/web -- tests/xss-escape.test.tsx tests/citations.test.ts tests/evidence-citation.test.tsx
-	@echo "guardrails: NeMo/HF-ready scanners + structured offline + security tests ok"
+	@echo "guardrails: NeMo/HF-ready scanners + harness/regen loops + security tests ok"
+
+guardrails-harness: sync ## Offline injection corpus + bounded regen-loop harness
+	@$(UV) run --project apps/api python -m app.guardrails_harness \
+		--out "$(ROOT)/artifacts/guardrails" --backend structured
 
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
 	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration
 
-eval: sync ## Offline golden eval harness (fake providers; writes artifacts/eval)
-	@$(UV) run --project apps/api python -m app.eval.cli --out "$(ROOT)/artifacts/eval"
+eval: sync ## Full offline eval suite — RAG + tutor + guardrails (fake providers)
+	@$(UV) run --project apps/api python -m app.eval.cli --suite all --out "$(ROOT)/artifacts/eval"
+
+eval-rag: sync ## RAG golden eval only (hard + regression gates)
+	@$(UV) run --project apps/api python -m app.eval.cli --suite rag --out "$(ROOT)/artifacts/eval/rag"
 
 smoke: ## Opt-in smoke — API live/ready only (no paid AI)
 	@curl -fsS http://127.0.0.1:8000/health/live | head -c 400; echo

@@ -54,6 +54,8 @@ The system instructions say: transcripts, descriptions, retrieved snippets and s
 - `InputPolicy`: Pydantic constraints, suspicious content scoring, per-user rate limits; user requests asking to summarize permitted content normally proceed despite quoted malicious source.
 - `EvidencePolicy`: allowed `workspace_id`, video IDs, revision, span IDs, token context budget, citation membership.
 - `OutputPolicy`: schema, safe Markdown, bad URL stripping, factual evidence checks, limited regeneration.
+- `GuardedTextModel` regen loop: when model-output rails `BLOCK`, regenerate up to `AI_GUARDRAILS_MAX_REGEN_LOOPS` (default 1) with a stricter instruction appendix, then sanitize.
+- Offline harness: `make guardrails-harness` runs `fixtures/security/injection_corpus.jsonl` (direct vs indirect) plus a regen-loop check; reports under `artifacts/guardrails/`.
 - `AccessPolicy`: server-enforced authorization on all operations and database queries.
 - `UsagePolicy`: per-user daily input/token/job caps, concurrent worker caps, max payload sizes, spend ceiling.
 - `PrivacyPolicy`: remove secrets from logs, provider transfer disclosure, retention and deletion.

@@ -70,6 +70,13 @@ Recommended metrics (defined before testing):
 
 Numerical targets above are **proposed launch gates**, not measured results.
 
+### Offline suite (implemented)
+
+- `make eval` / `python -m app.eval.cli --suite all` runs RAG golden eval + tutor practice cards + guardrails harness (fake providers only).
+- **Hard gates (fail exit):** citation validity, zero tenant leaks, zero fabricated timestamp links, playlist coverage accuracy, adversarial exfil blocked, schema validity.
+- **Regression gates (calibrated on fixtures):** recall@10, MRR, abstention, answer completeness, attribution precision (lexical proxy), summarization faithfulness/coverage, hybrid MRR lift ≥ dense-only. See `fixtures/golden/targets.json`.
+- Reports: `artifacts/eval/suite_report.{json,md}` plus per-section reports. Dataset versioned via `fixtures/golden/DATASET_VERSION`.
+
 ## 8. Baselines and ablations
 
 A: direct per-video long-transcript summary; B: lexical search + grounded answer; C: hybrid RAG + citations; D: hierarchical RAG + citations; E (optional): authorized vision-assisted retrieval. Hold golden content and providers comparable; measure quality/cost. Require evidence before justifying a graph DB or expensive reranker.

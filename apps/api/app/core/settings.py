@@ -215,6 +215,10 @@ class Settings(BaseSettings):
     ai_guardrails_block_direct_injection: bool = Field(
         default=True, alias="AI_GUARDRAILS_BLOCK_DIRECT_INJECTION"
     )
+    # Bounded output regeneration when model-output rails BLOCK (docs/06).
+    ai_guardrails_max_regen_loops: int = Field(
+        default=1, ge=0, le=3, alias="AI_GUARDRAILS_MAX_REGEN_LOOPS"
+    )
 
     @field_validator(
         "database_url",

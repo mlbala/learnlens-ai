@@ -5,6 +5,31 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 
+def attribution_precision(
+    claim_text: str,
+    cited_source_texts: Sequence[str],
+) -> float:
+    """
+    Offline attribution proxy: fraction of claim content tokens that appear in
+    at least one cited source segment. Not human entailment — calibrated gate only.
+    """
+    claim_tokens = _content_tokens(claim_text)
+    if not claim_tokens:
+        return 1.0
+    source_tokens: set[str] = set()
+    for blob in cited_source_texts:
+        source_tokens.update(_content_tokens(blob))
+    if not source_tokens:
+        return 0.0
+    hits = sum(1 for token in claim_tokens if token in source_tokens)
+    return hits / len(claim_tokens)
+
+
+def hybrid_mrr_lift(*, hybrid_mrr: float, dense_mrr: float) -> float:
+    """Relative MRR lift of hybrid over dense-only (can be negative)."""
+    return float(hybrid_mrr) - float(dense_mrr)
+
+
 def recall_at_k(relevant: Sequence[str], retrieved: Sequence[str], *, k: int) -> float:
     if not relevant:
         return 1.0
@@ -94,8 +119,11 @@ def _content_tokens(text: str) -> list[str]:
         "your",
     }
     tokens: list[str] = []
-    for raw in text.lower().replace(",", " ").replace(".", " ").split():
-        token = "".join(ch for ch in raw if ch.isalnum() or ch in {"_", "-"})
+    normalized = text.lower()
+    for ch in ",.()[]{}\"'`:;/\\":
+        normalized = normalized.replace(ch, " ")
+    for raw in normalized.split():
+        token = "".join(c for c in raw if c.isalnum() or c in {"_", "-"})
         if len(token) < 3 or token in stop:
             continue
         tokens.append(token)

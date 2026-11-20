@@ -1,8 +1,11 @@
 {
-  "dataset_version": "1.0.0",
+  "dataset_version": "1.1.0",
   "fixture_data": true,
   "license_note": "Synthetic fixture data for LearnLens offline evaluation. Not real YouTube content.",
-  "workspaces": ["workspace_a", "workspace_b"],
+  "workspaces": [
+    "workspace_a",
+    "workspace_b"
+  ],
   "playlists": {
     "pl_complete": "All member videos have ready transcripts",
     "pl_partial": "Two ready, one missing transcript"
@@ -18,5 +21,6 @@
   ],
   "cases_file": "expected.jsonl",
   "targets_file": "targets.json",
-  "corpus_file": "corpus.json"
+  "corpus_file": "corpus.json",
+  "changelog": "1.1.0: expanded QA cases, attribution/regression gates, library scope, tutor suite"
 }
