@@ -220,12 +220,40 @@ class PlaylistSynthesisService:
                 last_error_code=exc.code,
             )
             raise
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 — map provider outages to actionable codes
+            from app.ai.errors import ProviderError
+            from app.core.observability.circuit_breaker import CircuitOpenError
+            from app.core.observability.dead_letter import evaluate_retry
+
+            if isinstance(exc, CircuitOpenError):
+                code = "PROVIDER_CIRCUIT_OPEN"
+                retryable = True
+            elif isinstance(exc, ProviderError):
+                code = exc.code
+                retryable = exc.retryable
+            else:
+                code = "SYNTHESIS_FAILED"
+                retryable = False
+            decision = evaluate_retry(
+                attempt=job.attempt,
+                max_attempts=self._settings.transcript_job_max_attempts,
+                error_code=code,
+                retryable=retryable,
+                queue="playlist_synthesis",
+            )
+            if decision.should_retry:
+                await self._jobs.transition(
+                    job,
+                    status=JobStatus.QUEUED,
+                    stage=JobStage.PENDING,
+                    last_error_code=code,
+                )
+                return None
             await self._jobs.transition(
                 job,
                 status=JobStatus.FAILED,
                 stage=JobStage.ERROR,
-                last_error_code="SYNTHESIS_FAILED",
+                last_error_code=decision.error_code,
             )
             raise
 

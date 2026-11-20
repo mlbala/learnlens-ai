@@ -37,7 +37,7 @@ def test_alembic_offline_sql_generation() -> None:
     assert rev is not None
     assert "users" in (rev.doc or "users") or rev.revision == "20261118_0001"
     head = scripts.get_current_head()
-    assert head == "20261120_0006"
+    assert head == "20261120_0007"
     summaries_rev = scripts.get_revision("20261120_0003")
     assert summaries_rev is not None
     assert summaries_rev.down_revision == "20261119_0002"
@@ -50,6 +50,9 @@ def test_alembic_offline_sql_generation() -> None:
     audit_rev = scripts.get_revision("20261120_0006")
     assert audit_rev is not None
     assert audit_rev.down_revision == "20261120_0005"
+    usage_rev = scripts.get_revision("20261120_0007")
+    assert usage_rev is not None
+    assert usage_rev.down_revision == "20261120_0006"
 
 
 @pytest.mark.integration

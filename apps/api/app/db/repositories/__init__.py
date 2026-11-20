@@ -14,6 +14,7 @@ from app.db.repositories.summaries import (
     ProviderRunRepository,
     SummaryRepository,
 )
+from app.db.repositories.usage import UsageLimitRepository
 from app.db.repositories.users import UserRepository
 from app.db.repositories.videos import VideoRepository
 from app.db.repositories.workspaces import WorkspaceRepository
@@ -35,4 +36,5 @@ __all__ = [
     "ChatMessageRepository",
     "MessageCitationRepository",
     "AuditEventRepository",
+    "UsageLimitRepository",
 ]

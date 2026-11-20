@@ -46,6 +46,39 @@ class MeResponse(BaseModel):
     workspace: WorkspaceOut
 
 
+class UsageCountsOut(BaseModel):
+    jobs_used: int
+    tokens_used: int
+    requests_used: int
+    provider_runs: int = 0
+    jobs_by_status: dict[str, int] = Field(default_factory=dict)
+
+
+class UsageQuotasOut(BaseModel):
+    jobs_cap: int
+    tokens_cap: int
+    requests_cap: int
+    spend_cap_usd: float
+
+
+class EstimatedCostOut(BaseModel):
+    estimate_usd: float
+    estimate_version: str
+    is_estimate: bool = True
+    disclaimer: str
+
+
+class UsageResponse(BaseModel):
+    """Workspace usage dashboard — costs are estimates, never live billing."""
+
+    period: str
+    counts: UsageCountsOut
+    quotas: UsageQuotasOut
+    estimated_cost: EstimatedCostOut
+    request_id: str | None = None
+    worker_metrics: dict[str, Any] = Field(default_factory=dict)
+
+
 class AuthOkResponse(BaseModel):
     user: UserOut
     workspace: WorkspaceOut

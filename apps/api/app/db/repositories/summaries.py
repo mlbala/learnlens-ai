@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.observability.cost import estimate_provider_cost
 from app.db.models import Chapter, ProviderRun, Summary
 
 
@@ -90,6 +91,16 @@ class ProviderRunRepository:
         status: str,
         metadata_json: dict[str, Any] | None = None,
     ) -> ProviderRun:
+        estimate = estimate_provider_cost(
+            provider=provider,
+            model=model,
+            token_in=token_in,
+            token_out=token_out,
+        )
+        meta = dict(metadata_json or {})
+        meta.setdefault("cost_estimate_version", estimate.estimate_version)
+        meta.setdefault("cost_is_estimate", True)
+        meta.setdefault("cost_disclaimer", estimate.disclaimer)
         row = ProviderRun(
             workspace_id=workspace_id,
             provider=provider,
@@ -99,10 +110,10 @@ class ProviderRunRepository:
             prompt_version=prompt_version,
             token_in=token_in,
             token_out=token_out,
-            cost_estimate_usd=None,
+            cost_estimate_usd=estimate.estimate_usd,
             latency_ms=latency_ms,
             status=status,
-            metadata_json=metadata_json,
+            metadata_json=meta,
         )
         self._session.add(row)
         await self._session.flush()

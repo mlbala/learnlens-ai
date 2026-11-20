@@ -9,6 +9,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.observability.dead_letter import evaluate_retry
+from app.core.observability.metrics import get_worker_metrics
+from app.core.observability.tracing import celery_headers_from_context, start_span
 from app.core.policies.audit_policy import AuditRecord, get_audit_policy
 from app.core.policies.input_policy import InputPolicy, InputPolicyViolation
 from app.core.policies.privacy_policy import PrivacyPolicy
@@ -25,6 +28,7 @@ from app.domain.transcript_parse import (
     parse_transcript,
     sha256_hex,
 )
+from app.services.usage import UsageService, WorkspaceQuotaExceeded
 from app.storage.factory import get_storage_adapter
 
 logger = logging.getLogger(__name__)
@@ -96,6 +100,12 @@ class TranscriptIngestService:
         try:
             usage.check_job_allowed(str(user_id))
         except UsageQuotaExceeded as exc:
+            raise TranscriptIngestError(429, exc.code, exc.message) from exc
+
+        workspace_usage = UsageService(self._session, self._settings)
+        try:
+            await workspace_usage.check_job_allowed(workspace_id)
+        except WorkspaceQuotaExceeded as exc:
             raise TranscriptIngestError(429, exc.code, exc.message) from exc
 
         video = await self._videos.get_in_workspace(
@@ -188,6 +198,9 @@ class TranscriptIngestService:
         )
 
         usage.record_job(str(user_id))
+        # Workspace ledger: only on newly created jobs (idempotent replay skips this).
+        await workspace_usage.record_job(workspace_id)
+        get_worker_metrics().record_enqueue("transcript")
         audit_meta = {
             **PrivacyPolicy.transcript_log_safe(
                 character_count=parsed.character_count,
@@ -245,7 +258,10 @@ class TranscriptIngestService:
         else:
             # Durable path: commit so the worker session can see the job row.
             await self._session.commit()
-            process_transcript_job.delay(str(job.id))
+            process_transcript_job.apply_async(
+                args=(str(job.id),),
+                headers=celery_headers_from_context(),
+            )
             await self._session.refresh(job)
 
         return TranscriptIngestResult(job=job, asset=asset, created=True, replay=False)
@@ -261,6 +277,17 @@ class TranscriptIngestService:
             return job
 
         max_attempts = self._settings.transcript_job_max_attempts
+        with start_span(
+            "transcript.process_job",
+            job_id=str(job_id),
+            workspace_id=str(job.workspace_id),
+            attempt=job.attempt,
+        ):
+            return await self._process_job_inner(job, max_attempts=max_attempts)
+
+    async def _process_job_inner(
+        self, job: IngestionJob, *, max_attempts: int
+    ) -> IngestionJob:
         try:
             if job.status == JobStatus.QUEUED and job.stage == JobStage.PENDING:
                 await self._jobs.transition(
@@ -382,7 +409,14 @@ class TranscriptIngestService:
             },
         )
 
-        if retryable and job.attempt < max_attempts:
+        decision = evaluate_retry(
+            attempt=job.attempt,
+            max_attempts=max_attempts,
+            error_code=code,
+            retryable=retryable,
+            queue="transcript",
+        )
+        if decision.should_retry:
             await self._jobs.transition(
                 job,
                 status=JobStatus.QUEUED,
@@ -391,6 +425,7 @@ class TranscriptIngestService:
             )
             return job
 
+        final_code = decision.error_code
         if job.status != JobStatus.FAILED:
             # May already be mid-flight; force fail if transition allows, else set fields.
             try:
@@ -398,12 +433,12 @@ class TranscriptIngestService:
                     job,
                     status=JobStatus.FAILED,
                     stage=JobStage.ERROR,
-                    last_error_code=code,
+                    last_error_code=final_code,
                 )
             except Exception:  # noqa: BLE001
                 job.status = JobStatus.FAILED
                 job.stage = JobStage.ERROR
-                job.last_error_code = code
+                job.last_error_code = final_code
                 job.percent = 100
                 await self._session.flush()
 

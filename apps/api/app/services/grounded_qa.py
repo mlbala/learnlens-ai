@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.contracts import EmbeddingModel, ModelRequest, TextModel
 from app.ai.factory import build_embedding_model, build_text_model
+from app.core.observability.cost import estimate_provider_cost
 from app.core.policies.audit_policy import AuditRecord, get_audit_policy
 from app.core.policies.output_policy import OutputPolicy
 from app.core.policies.usage_policy import UsageQuotaExceeded, get_usage_policy
@@ -55,6 +56,7 @@ from app.retrieval.filters import parse_uuid
 from app.retrieval.profile import active_embedding_profile
 from app.retrieval.query import HybridQueryService
 from app.retrieval.scope import ScopeKind, resolve_authorized_video_ids
+from app.services.usage import UsageService, WorkspaceQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +239,12 @@ class GroundedQaService:
             except UsageQuotaExceeded as exc:
                 raise GroundedQaError(429, exc.code, exc.message) from exc
 
+        workspace_usage = UsageService(self._session, self._settings)
+        try:
+            await workspace_usage.check_request_allowed(workspace_id)
+        except WorkspaceQuotaExceeded as exc:
+            raise GroundedQaError(429, exc.code, exc.message) from exc
+
         thread = await self.get_thread(thread_id=thread_id, workspace_id=workspace_id)
         if thread is None:
             get_audit_policy().record(
@@ -368,27 +376,48 @@ class GroundedQaService:
             explanation_mode.value,
             sorted(packet.allowed_segment_ids),
         )
-        run = await self._runs.create(
+        # Exactly-once spend effect via request_hash: cache hits skip ledger increment.
+        existing_run = await self._runs.find_by_request_hash(
             workspace_id=workspace_id,
-            provider=result.usage.provider,
-            model=result.usage.model,
-            operation="grounded_qa",
             request_hash=req_hash,
-            prompt_version=prompt_version(),
-            token_in=result.usage.input_tokens,
-            token_out=result.usage.output_tokens,
-            latency_ms=latency_ms,
-            status="succeeded",
-            metadata_json={
-                "scope_kind": authorized.scope_kind,
-                "hit_count": len(search.hits),
-                "evidence_count": len(packet.allowed_segment_ids),
-                "dropped_citation_ids": validated.dropped_citation_ids[:20],
-                "refused": validated.refused,
-                # Candidate IDs/scores only — no raw transcript in routine telemetry.
-                "retrieval": self._query_service().result_telemetry(search),
-            },
         )
+        if existing_run is not None:
+            run = existing_run
+        else:
+            run = await self._runs.create(
+                workspace_id=workspace_id,
+                provider=result.usage.provider,
+                model=result.usage.model,
+                operation="grounded_qa",
+                request_hash=req_hash,
+                prompt_version=prompt_version(),
+                token_in=result.usage.input_tokens,
+                token_out=result.usage.output_tokens,
+                latency_ms=latency_ms,
+                status="succeeded",
+                metadata_json={
+                    "scope_kind": authorized.scope_kind,
+                    "hit_count": len(search.hits),
+                    "evidence_count": len(packet.allowed_segment_ids),
+                    "dropped_citation_ids": validated.dropped_citation_ids[:20],
+                    "refused": validated.refused,
+                    # Candidate IDs/scores only — no raw transcript in routine telemetry.
+                    "retrieval": self._query_service().result_telemetry(search),
+                },
+            )
+            estimate = estimate_provider_cost(
+                provider=result.usage.provider,
+                model=result.usage.model,
+                token_in=result.usage.input_tokens,
+                token_out=result.usage.output_tokens,
+            )
+            await workspace_usage.record_provider_usage(
+                workspace_id,
+                token_in=result.usage.input_tokens,
+                token_out=result.usage.output_tokens,
+                estimate_usd=estimate.estimate_usd,
+                effect_key=req_hash,
+            )
         return await self._persist_answer(
             thread=thread,
             user_message=user_msg,

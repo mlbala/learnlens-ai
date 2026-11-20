@@ -1,0 +1,61 @@
+{
+  "title": "LearnLens sample ops dashboard (fixture)",
+  "note": "Illustrative panels only — not a live Grafana export. Costs are estimates (v0-placeholder-not-live-rates).",
+  "panels": [
+    {
+      "id": "request_rate",
+      "title": "HTTP requests by status",
+      "query_hint": "count by (status_code) of structured logs where message=request_completed",
+      "sample": { "200": 120, "401": 4, "429": 2, "503": 1 }
+    },
+    {
+      "id": "trace_correlation",
+      "title": "Trace / request correlation",
+      "query_hint": "group logs by trace_id across api and celery loggers",
+      "sample": { "spans_with_request_id": 100, "orphan_worker_spans": 0 }
+    },
+    {
+      "id": "worker_queue",
+      "title": "Worker queue metrics",
+      "query_hint": "GET /health/ready → worker_metrics or GET /api/v1/usage → worker_metrics",
+      "sample": {
+        "transcript": {
+          "enqueued": 10,
+          "started": 10,
+          "succeeded": 8,
+          "failed": 1,
+          "dead_lettered": 1,
+          "recovered": 0,
+          "depth_estimate": 0
+        }
+      }
+    },
+    {
+      "id": "estimated_spend",
+      "title": "Estimated workspace spend (NOT live rates)",
+      "query_hint": "sum(provider_runs.cost_estimate_usd) by workspace; label is_estimate=true",
+      "sample": {
+        "estimate_usd": 0.0,
+        "estimate_version": "v0-placeholder-not-live-rates",
+        "is_estimate": true
+      }
+    },
+    {
+      "id": "error_taxonomy",
+      "title": "Actionable failures by category",
+      "query_hint": "classify last_error_code via error_taxonomy.classify_error",
+      "sample": {
+        "provider": 2,
+        "quota": 1,
+        "job": 1,
+        "dependency": 0
+      }
+    },
+    {
+      "id": "circuit_breaker",
+      "title": "Provider circuit state",
+      "query_hint": "log events provider_retry_backoff / PROVIDER_CIRCUIT_OPEN",
+      "sample": { "open_providers": [] }
+    }
+  ]
+}

@@ -1,8 +1,7 @@
-"""FastAPI application factory — health + schema/auth + security gate."""
+"""FastAPI application factory — health + schema/auth + security + observability."""
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -17,12 +16,15 @@ from app.api.v1 import (
     me_router,
     playlists_router,
     settings_providers_router,
+    usage_router,
     videos_router,
 )
 from app.core.api_abuse import ApiAbuseMiddleware
 from app.core.errors import http_exception_handler
+from app.core.observability import configure_circuit_breaker, configure_structured_logging
 from app.core.policies.audit_policy import configure_audit_policy
 from app.core.policies.usage_policy import configure_usage_policy
+from app.core.quota_middleware import QuotaMiddleware
 from app.core.rate_limit import configure_api_rate_limiter, configure_auth_rate_limiter
 from app.core.request_id import RequestIdMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -30,17 +32,10 @@ from app.core.settings import Settings, get_settings
 from app.db.session import create_engine, create_session_factory
 
 
-def configure_logging(settings: Settings) -> None:
-    """Basic structured-friendly logging; request_id attached via middleware extras."""
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
+    configure_structured_logging(level=settings.log_level, json_logs=settings.log_json)
     configure_auth_rate_limiter(
         limit=settings.auth_rate_limit_per_minute,
         window_seconds=60.0,
@@ -52,6 +47,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_usage_policy(
         daily_chat_messages=settings.usage_daily_chat_messages,
         daily_transcript_jobs=settings.usage_daily_transcript_jobs,
+    )
+    configure_circuit_breaker(
+        failure_threshold=settings.circuit_failure_threshold,
+        recovery_timeout_seconds=settings.circuit_recovery_timeout_seconds,
     )
     configure_audit_policy()
     engine = None
@@ -72,7 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the API app. Does not call paid AI providers on startup."""
     settings = settings or get_settings()
-    configure_logging(settings)
+    configure_structured_logging(level=settings.log_level, json_logs=settings.log_json)
 
     if settings.is_production_like() and settings.session_secret in {
         "",
@@ -106,11 +105,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "Authorization",
             "Content-Type",
             "X-Request-ID",
+            "X-Trace-ID",
+            "traceparent",
             "X-CSRF-Token",
             "Idempotency-Key",
         ],
-        expose_headers=["X-Request-ID"],
+        expose_headers=["X-Request-ID", "X-Trace-ID", "traceparent"],
     )
+    app.add_middleware(QuotaMiddleware, settings=settings)
     app.add_middleware(ApiAbuseMiddleware, settings=settings)
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
     app.add_middleware(RequestIdMiddleware)
@@ -124,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(chat_router)
     app.include_router(settings_providers_router)
+    app.include_router(usage_router)
     return app
 
 
