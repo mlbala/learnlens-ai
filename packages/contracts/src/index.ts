@@ -33,6 +33,10 @@ export type JobStage =
 
 export type SummaryKind = "short" | "detailed" | "simple" | "technical";
 
+export type ExplanationMode = "simple" | "standard" | "technical";
+
+export type ChatScopeKind = "video" | "playlist" | "library";
+
 export type Provenance =
   | "source_supported"
   | "ai_generated_illustration"
@@ -114,11 +118,58 @@ export interface SummaryContract {
   provider_run_id?: string | null;
 }
 
+export interface QaClaimContract {
+  text: string;
+  citation_segment_ids: string[];
+}
+
+export interface QaAnalogyContract {
+  text: string;
+  origin: "ai_generated_illustration" | string;
+}
+
+export interface CitationContract {
+  citation_id: string;
+  video_id: string;
+  video_title: string;
+  segment_id: string;
+  snippet: string;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  youtube_url?: string | null;
+  timing_verified: boolean;
+}
+
+export interface ChatThreadContract {
+  id: string;
+  workspace_id: string;
+  scope_kind: ChatScopeKind | string;
+  scope_id?: string | null;
+  title?: string | null;
+  created_by: string;
+}
+
+export interface ChatMessageContract {
+  id: string;
+  thread_id: string;
+  workspace_id: string;
+  role: "user" | "assistant" | "system" | string;
+  content: string;
+  explanation_mode?: ExplanationMode | string | null;
+  confidence_label?: string | null;
+  unsupported: boolean;
+  claims: QaClaimContract[];
+  analogies: QaAnalogyContract[];
+  citations: CitationContract[];
+  provider_run_id?: string | null;
+}
+
 export interface ScaffoldMeta {
-  phase: "06";
+  phase: "08";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
   authorizedTranscriptIngest: true;
   durableJobs: true;
   chaptersAndSummaries: true;
+  groundedQa: true;
 }

@@ -157,3 +157,22 @@ class TranscriptSegmentRepository:
             .order_by(TranscriptSegment.ordinal.asc())
         )
         return list(result.scalars().all())
+
+    async def get_by_ids_in_workspace(
+        self,
+        *,
+        segment_ids: list[uuid.UUID] | tuple[uuid.UUID, ...] | set[uuid.UUID],
+        workspace_id: uuid.UUID,
+        video_ids: tuple[uuid.UUID, ...] | list[uuid.UUID] | None = None,
+    ) -> list[TranscriptSegment]:
+        ids = list(segment_ids)
+        if not ids:
+            return []
+        stmt = select(TranscriptSegment).where(
+            TranscriptSegment.id.in_(ids),
+            TranscriptSegment.workspace_id == workspace_id,
+        )
+        if video_ids is not None:
+            stmt = stmt.where(TranscriptSegment.video_id.in_(list(video_ids)))
+        result = await self._session.execute(stmt.order_by(TranscriptSegment.ordinal.asc()))
+        return list(result.scalars().all())

@@ -1,5 +1,6 @@
 """ORM models — import side effects register metadata for Alembic."""
 
+from app.db.models.chat import ChatMessage, ChatThread, MessageCitation
 from app.db.models.identity import Session, User, Workspace, WorkspaceMembership
 from app.db.models.indexing import IndexManifest
 from app.db.models.jobs import IngestionJob, OutboxEvent
@@ -23,4 +24,7 @@ __all__ = [
     "ProviderRun",
     "Summary",
     "IndexManifest",
+    "ChatThread",
+    "ChatMessage",
+    "MessageCitation",
 ]

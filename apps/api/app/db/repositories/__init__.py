@@ -1,4 +1,9 @@
 from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentRepository
+from app.db.repositories.chat import (
+    ChatMessageRepository,
+    ChatThreadRepository,
+    MessageCitationRepository,
+)
 from app.db.repositories.indexing import IndexManifestRepository
 from app.db.repositories.jobs import IngestionJobRepository
 from app.db.repositories.playlists import PlaylistRepository
@@ -25,4 +30,7 @@ __all__ = [
     "ProviderRunRepository",
     "SummaryRepository",
     "IndexManifestRepository",
+    "ChatThreadRepository",
+    "ChatMessageRepository",
+    "MessageCitationRepository",
 ]

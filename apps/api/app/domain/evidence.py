@@ -161,3 +161,145 @@ def validate_summary_payload(
         blocked_unsupported=blocked,
         dropped_citation_ids=sorted(set(dropped)),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class QaEvidenceItem:
+    segment_id: str
+    video_id: uuid.UUID
+    text: str
+    start_ms: int | None
+    end_ms: int | None
+    source_revision: int
+    youtube_video_id: str
+    video_title: str
+    timecode_quality: str
+
+
+@dataclass(frozen=True, slots=True)
+class QaEvidencePacket:
+    workspace_id: uuid.UUID
+    scope_kind: str
+    scope_id: uuid.UUID | None
+    allowed_segment_ids: frozenset[str]
+    items_by_id: dict[str, QaEvidenceItem]
+
+
+@dataclass
+class ValidatedQaAnswer:
+    answer: str
+    claims: list[dict[str, Any]]
+    analogies: list[dict[str, Any]]
+    unsupported: bool
+    confidence_label: str
+    cited_segment_ids: list[str]
+    dropped_citation_ids: list[str] = field(default_factory=list)
+    refused: bool = False
+
+
+def build_qa_packet(
+    *,
+    workspace_id: uuid.UUID,
+    scope_kind: str,
+    scope_id: uuid.UUID | None,
+    items: list[QaEvidenceItem],
+) -> QaEvidencePacket:
+    by_id = {item.segment_id: item for item in items if item.segment_id}
+    return QaEvidencePacket(
+        workspace_id=workspace_id,
+        scope_kind=scope_kind,
+        scope_id=scope_id,
+        allowed_segment_ids=frozenset(by_id.keys()),
+        items_by_id=by_id,
+    )
+
+
+def validate_qa_payload(
+    payload: dict[str, Any],
+    packet: QaEvidencePacket,
+    *,
+    refusal_message: str,
+) -> ValidatedQaAnswer:
+    """
+    Fail closed: every citation_segment_id must be in the retrieved evidence packet.
+
+    Unsupported claims are dropped. If no supported claims remain for a substantive
+    answer (or the model marks unsupported / packet empty), return an abstention.
+    """
+    dropped: list[str] = []
+
+    def _filter_ids(raw: list[Any] | None) -> list[str]:
+        kept: list[str] = []
+        for item in raw or []:
+            sid = str(item)
+            if sid in packet.allowed_segment_ids:
+                if sid not in kept:
+                    kept.append(sid)
+            else:
+                dropped.append(sid)
+        return kept
+
+    model_unsupported = bool(payload.get("unsupported"))
+    empty_packet = not packet.allowed_segment_ids
+
+    claims_out: list[dict[str, Any]] = []
+    for claim in payload.get("claims") or []:
+        if not isinstance(claim, dict):
+            continue
+        text = str(claim.get("text") or "").strip()
+        if not text:
+            continue
+        ids = _filter_ids(claim.get("citation_segment_ids"))
+        if not ids:
+            continue
+        claims_out.append({"text": text, "citation_segment_ids": ids})
+
+    analogies_out: list[dict[str, Any]] = []
+    for analogy in payload.get("analogies") or []:
+        if not isinstance(analogy, dict):
+            continue
+        text = str(analogy.get("text") or "").strip()
+        if not text:
+            continue
+        analogies_out.append(
+            {
+                "text": text,
+                "origin": "ai_generated_illustration",
+            }
+        )
+
+    cited: list[str] = []
+    for claim in claims_out:
+        for sid in claim["citation_segment_ids"]:
+            if sid not in cited:
+                cited.append(sid)
+
+    answer_text = str(payload.get("answer") or "").strip()
+    label = str(payload.get("confidence_label") or "supported").strip() or "supported"
+
+    refuse = empty_packet or model_unsupported or not claims_out
+    if refuse:
+        return ValidatedQaAnswer(
+            answer=refusal_message,
+            claims=[],
+            analogies=[],
+            unsupported=True,
+            confidence_label="abstain",
+            cited_segment_ids=[],
+            dropped_citation_ids=sorted(set(dropped)),
+            refused=True,
+        )
+
+    if label not in {"supported", "partial", "unsupported", "abstain"}:
+        label = "supported" if claims_out else "abstain"
+
+    return ValidatedQaAnswer(
+        answer=answer_text or refusal_message,
+        claims=claims_out,
+        analogies=analogies_out,
+        unsupported=False,
+        confidence_label=label,
+        cited_segment_ids=cited,
+        dropped_citation_ids=sorted(set(dropped)),
+        refused=False,
+    )

@@ -64,12 +64,29 @@ class FakeTextAdapter:
 
     def _fixture_for(self, purpose: str, evidence_ids: list[str]) -> dict[str, Any]:
         if purpose == "grounded_qa":
-            eid = evidence_ids[0] if evidence_ids else "seg_fixture_01"
+            if not evidence_ids:
+                return {
+                    "answer": (
+                        "I do not have enough verified transcript evidence in this "
+                        "scope to answer that."
+                    ),
+                    "claims": [],
+                    "unsupported": True,
+                    "confidence_label": "abstain",
+                    "analogies": [],
+                }
+            eid = evidence_ids[0]
             payload = dict(FAKE_GROUNDED_QA)
             payload["claims"] = [
                 {
                     "text": "Clarify requirements before coding.",
                     "citation_segment_ids": [eid],
+                }
+            ]
+            payload["analogies"] = [
+                {
+                    "text": "Like checking a recipe before cooking.",
+                    "origin": "ai_generated_illustration",
                 }
             ]
             return payload

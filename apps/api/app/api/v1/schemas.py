@@ -279,3 +279,79 @@ class SummarizeAccepted(BaseModel):
     provider_calls: int
     blocked: bool
     source_revision: int
+
+
+class CreateChatThreadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope_kind: str = Field(pattern="^(video|playlist|library)$")
+    scope_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, max_length=300)
+
+
+class ChatThreadOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    scope_kind: str
+    scope_id: uuid.UUID | None = None
+    title: str | None = None
+    created_by: uuid.UUID
+    created_at: datetime
+
+
+class PostChatMessageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=20_000)
+    explanation_mode: str = Field(default="standard", pattern="^(simple|standard|technical)$")
+
+
+class QaClaimOut(BaseModel):
+    text: str
+    citation_segment_ids: list[str] = Field(default_factory=list)
+
+
+class QaAnalogyOut(BaseModel):
+    text: str
+    origin: str = "ai_generated_illustration"
+
+
+class CitationOut(BaseModel):
+    citation_id: str
+    video_id: uuid.UUID
+    video_title: str
+    segment_id: uuid.UUID
+    snippet: str
+    start_ms: int | None = None
+    end_ms: int | None = None
+    youtube_url: str | None = None
+    timing_verified: bool = False
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    workspace_id: uuid.UUID
+    role: str
+    content: str
+    explanation_mode: str | None = None
+    confidence_label: str | None = None
+    unsupported: bool = False
+    claims: list[QaClaimOut] = Field(default_factory=list)
+    analogies: list[QaAnalogyOut] = Field(default_factory=list)
+    citations: list[CitationOut] = Field(default_factory=list)
+    provider_run_id: uuid.UUID | None = None
+    created_at: datetime
+
+
+class PostChatMessageResponse(BaseModel):
+    user_message: ChatMessageOut
+    assistant_message: ChatMessageOut
+    unsupported: bool
+    confidence_label: str
+    explanation_mode: str
+
+
+class ChatMessageListResponse(BaseModel):
+    items: list[ChatMessageOut]
+    limit: int
