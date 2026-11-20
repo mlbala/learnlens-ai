@@ -78,6 +78,20 @@ export function presentStatus(status: string): StatusPresentation {
       return { label: "Discovered", tone: "info" };
     case "deleted":
       return { label: "Deleted", tone: "neutral" };
+    case "partial":
+      return {
+        label: "Partial coverage",
+        tone: "warning",
+        actionHint: "Add missing transcripts",
+      };
+    case "fixture":
+      return { label: "Fixture data", tone: "info" };
+    case "failed":
+      return {
+        label: "Processing interrupted",
+        tone: "danger",
+        actionHint: "Retry",
+      };
     default:
       return { label: "Unknown status", tone: "neutral" };
   }

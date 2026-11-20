@@ -5,13 +5,15 @@ from __future__ import annotations
 import uuid
 from collections import Counter
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from app.api.deps import CsrfAuth, CurrentAuth, DbSession, SettingsDep
 from app.api.v1.schemas import (
     ImportNoticeOut,
     PlaylistImportResponse,
     PlaylistItemOut,
+    PlaylistListItemOut,
+    PlaylistListResponse,
     PlaylistOut,
     YoutubeImportRequest,
 )
@@ -56,6 +58,33 @@ def _playlist_out(playlist: Playlist, items: list[PlaylistItem]) -> PlaylistOut:
         coverage=_coverage(items),
         transcript_from_url=False,
     )
+
+
+@router.get("", response_model=PlaylistListResponse)
+async def list_playlists(
+    ctx: CurrentAuth,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=100),
+) -> PlaylistListResponse:
+    """List playlists owned by the authenticated workspace (library screens)."""
+    access = AccessService(db)
+    playlists = await access.list_playlists_for_caller(ctx, limit=limit)
+    items: list[PlaylistListItemOut] = []
+    for playlist in playlists:
+        playlist_items = await access.list_playlist_items(playlist.id)
+        items.append(
+            PlaylistListItemOut(
+                id=playlist.id,
+                workspace_id=playlist.workspace_id,
+                youtube_playlist_id=playlist.youtube_playlist_id,
+                title=playlist.title,
+                status=playlist.status,
+                total_items=playlist.total_items,
+                coverage=_coverage(playlist_items),
+                transcript_from_url=False,
+            )
+        )
+    return PlaylistListResponse(items=items, limit=limit)
 
 
 @router.post("/import", response_model=PlaylistImportResponse)

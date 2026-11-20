@@ -170,3 +170,28 @@ def test_list_videos_scoped_to_workspace(client: TestClient) -> None:
     listed = client.get("/api/v1/videos")
     assert listed.status_code == 200
     assert len(listed.json()["items"]) >= 1
+
+
+def test_list_playlists_includes_coverage(client: TestClient) -> None:
+    _register(client, "plist@example.com")
+    headers = auth_csrf_headers(client)
+    imported = client.post(
+        "/api/v1/playlists/import",
+        headers=headers,
+        json={"youtube_url": "https://www.youtube.com/playlist?list=PLfixtureCourse01"},
+    )
+    assert imported.status_code == 200, imported.text
+    listed = client.get("/api/v1/playlists")
+    assert listed.status_code == 200
+    body = listed.json()
+    assert body["limit"] >= 1
+    assert len(body["items"]) >= 1
+    row = body["items"][0]
+    assert row["youtube_playlist_id"] == "PLfixtureCourse01"
+    assert row["transcript_from_url"] is False
+    coverage = row["coverage"]
+    assert coverage["total"] == 7
+    assert coverage["ready"] == 0
+    assert coverage["needs_transcript"] == 4
+    assert coverage["unavailable"] == 3
+    assert coverage["failed"] == 0

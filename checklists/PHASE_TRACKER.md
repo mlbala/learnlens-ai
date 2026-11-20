@@ -14,7 +14,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 07 Qdrant indexing/search | complete | 12403da on `dev` | `make lint` / `make typecheck` / `make test` → 126 passed offline (fake hybrid index/search, tenant filters, RRF, dimension reject, deletes); 4 integration deselected | no paid AI calls; live Qdrant free-tier upsert optional via `test_qdrant_integration` |
 | 08 grounded QA | complete | 0029bc8 on `dev` | `make lint` / `make typecheck` / `make test` → 138 passed offline (timed cites, invented citation reject, TXT no t=, tenant 404, abstention); 4 integration deselected | no paid AI calls; chat index still caller/test-driven via memory store (ingest→index hook remains later) |
 | 09 UI design system | complete | 023eb16 on `dev` | `make lint` / `make typecheck` / `make test` → 138 API passed (4 deselected) + 18 web Vitest passed; `next build` ok; no paid APIs | designer screenshots not captured here — verify `/` and `/design-system` at 375/768/1280 |
-| 10 library/playlist/video screens | not started | | | |
+| 10 library/playlist/video screens | complete | pending commit on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 30 web Vitest passed; fixture library mode default; no paid APIs | authenticated live API library path optional via `NEXT_PUBLIC_LIBRARY_MODE=api` (requires session); designer screenshots not captured |
 | 11 lesson reader + chat | not started | | | |
 | 12 notes + course synthesis | not started | | | |
 | 13 guardrails/security | not started | | | |

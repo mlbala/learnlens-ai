@@ -19,15 +19,9 @@ describe("PRIMARY_NAV", () => {
     ]);
   });
 
-  it("marks future screens as placeholders", () => {
+  it("marks only later-phase screens as placeholders", () => {
     const placeholders = PRIMARY_NAV.filter((item) => item.placeholder);
-    expect(placeholders.map((p) => p.id)).toEqual([
-      "library",
-      "playlists",
-      "videos",
-      "recent",
-      "settings",
-    ]);
+    expect(placeholders.map((p) => p.id)).toEqual(["recent", "settings"]);
   });
 });
 
@@ -38,10 +32,20 @@ describe("findNavItem / breadcrumbForPath", () => {
     expect(findNavItem("/unknown")).toBeUndefined();
   });
 
-  it("builds breadcrumbs for design-system preview", () => {
+  it("builds breadcrumbs for design-system and detail routes", () => {
     expect(breadcrumbForPath("/design-system")).toEqual([
       { label: "Home", href: "/" },
       { label: "Design system" },
+    ]);
+    expect(breadcrumbForPath("/videos/abc")).toEqual([
+      { label: "Home", href: "/" },
+      { label: "Videos", href: "/videos" },
+      { label: "Overview" },
+    ]);
+    expect(breadcrumbForPath("/playlists/xyz")).toEqual([
+      { label: "Home", href: "/" },
+      { label: "Playlists", href: "/playlists" },
+      { label: "Overview" },
     ]);
   });
 

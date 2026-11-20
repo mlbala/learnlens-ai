@@ -1,21 +1,21 @@
 /**
  * Primary IA from docs/07_UI_UX_DESIGN_SYSTEM.md §3.
- * Phase 09: shell destinations only — functional pages arrive in later phases.
+ * Phase 10: library / playlist / video screens are live; later phases remain placeholders.
  */
 
 export type NavItem = {
   id: string;
   label: string;
   href: string;
-  /** When true, destination is a shell placeholder (phase 10+). */
+  /** When true, destination is a shell placeholder (later phases). */
   placeholder?: boolean;
 };
 
 export const PRIMARY_NAV: readonly NavItem[] = [
   { id: "home", label: "Home", href: "/" },
-  { id: "library", label: "My Library", href: "/library", placeholder: true },
-  { id: "playlists", label: "Playlists", href: "/playlists", placeholder: true },
-  { id: "videos", label: "Videos", href: "/videos", placeholder: true },
+  { id: "library", label: "My Library", href: "/library" },
+  { id: "playlists", label: "Playlists", href: "/playlists" },
+  { id: "videos", label: "Videos", href: "/videos" },
   { id: "recent", label: "Recent Learning", href: "/recent", placeholder: true },
   { id: "settings", label: "Settings", href: "/settings", placeholder: true },
 ] as const;
@@ -45,6 +45,25 @@ export function breadcrumbForPath(pathname: string): { label: string; href?: str
   }
   if (pathname === "/design-system") {
     return [{ label: "Home", href: "/" }, { label: "Design system" }];
+  }
+  if (pathname === "/import") {
+    return [{ label: "Home", href: "/" }, { label: "Import source" }];
+  }
+  const videoMatch = pathname.match(/^\/videos\/([^/]+)$/);
+  if (videoMatch) {
+    return [
+      { label: "Home", href: "/" },
+      { label: "Videos", href: "/videos" },
+      { label: "Overview" },
+    ];
+  }
+  const playlistMatch = pathname.match(/^\/playlists\/([^/]+)$/);
+  if (playlistMatch) {
+    return [
+      { label: "Home", href: "/" },
+      { label: "Playlists", href: "/playlists" },
+      { label: "Overview" },
+    ];
   }
   const item = findNavItem(pathname);
   if (item) {

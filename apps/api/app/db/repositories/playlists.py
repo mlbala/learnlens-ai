@@ -93,3 +93,18 @@ class PlaylistRepository:
             .order_by(PlaylistItem.playlist_position.asc())
         )
         return list(result.scalars().all())
+
+    async def list_in_workspace(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        limit: int = 50,
+    ) -> list[Playlist]:
+        limit = min(max(limit, 1), 100)
+        result = await self._session.execute(
+            select(Playlist)
+            .where(Playlist.workspace_id == workspace_id)
+            .order_by(Playlist.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())

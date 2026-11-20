@@ -1,7 +1,13 @@
-import { ComingSoon } from "@/components/patterns/coming-soon";
+import { LibraryBrowser } from "@/components/library/library-browser";
 
 export const metadata = { title: "Playlists" };
 
 export default function PlaylistsPage() {
-  return <ComingSoon title="Playlists" />;
+  return (
+    <LibraryBrowser
+      initialKind="playlists"
+      title="Playlists"
+      description="Ordered collections with honest ready / missing / unavailable coverage."
+    />
+  );
 }

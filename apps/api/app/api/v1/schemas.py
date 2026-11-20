@@ -124,6 +124,26 @@ class PlaylistImportResponse(BaseModel):
     transcript_from_url: bool = False
 
 
+class PlaylistListItemOut(BaseModel):
+    """Summary row for library listings — coverage without full item payload."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    youtube_playlist_id: str
+    title: str
+    status: str
+    total_items: int
+    coverage: dict[str, int] | None = None
+    transcript_from_url: bool = False
+
+
+class PlaylistListResponse(BaseModel):
+    items: list[PlaylistListItemOut]
+    limit: int
+
+
 class ModelCapabilitiesOut(BaseModel):
     supports_json_schema: bool
     supports_stream: bool
