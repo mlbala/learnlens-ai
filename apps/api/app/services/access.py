@@ -61,5 +61,16 @@ class AccessService:
             workspace_id=ctx.workspace.id,
         )
 
+    async def list_playlists_for_caller(
+        self,
+        ctx: AuthContext,
+        *,
+        limit: int = 50,
+    ) -> list[Playlist]:
+        return await self._playlists.list_in_workspace(
+            workspace_id=ctx.workspace.id,
+            limit=limit,
+        )
+
     async def list_playlist_items(self, playlist_id: uuid.UUID) -> list[PlaylistItem]:
         return await self._playlists.list_items(playlist_id=playlist_id)

@@ -1,7 +1,7 @@
-import { ComingSoon } from "@/components/patterns/coming-soon";
+import { LibraryBrowser } from "@/components/library/library-browser";
 
 export const metadata = { title: "My Library" };
 
 export default function LibraryPage() {
-  return <ComingSoon title="My Library" />;
+  return <LibraryBrowser />;
 }
