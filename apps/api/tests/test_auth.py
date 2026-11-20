@@ -13,7 +13,7 @@ from auth_helpers import auth_csrf_headers
 def test_register_login_me_logout(client: TestClient) -> None:
     reg = client.post(
         "/api/v1/auth/register",
-        json={"email": "Alice@Example.com", "password": "correct-horse", "name": "Alice"},
+        json={"email": "Alice@Example.com", "password": "correct-horse-1", "name": "Alice"},
     )
     assert reg.status_code == 201, reg.text
     body = reg.json()
@@ -37,13 +37,13 @@ def test_register_login_me_logout(client: TestClient) -> None:
 def test_login_rejects_bad_password_without_enumeration(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "bob@example.com", "password": "correct-horse"},
+        json={"email": "bob@example.com", "password": "correct-horse-1"},
     )
     client.cookies.clear()
 
     missing = client.post(
         "/api/v1/auth/login",
-        json={"email": "nobody@example.com", "password": "correct-horse"},
+        json={"email": "nobody@example.com", "password": "correct-horse-1"},
     )
     wrong = client.post(
         "/api/v1/auth/login",
@@ -63,7 +63,7 @@ def test_login_rejects_bad_password_without_enumeration(client: TestClient) -> N
 def test_refresh_rotates_and_rejects_reuse(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "cara@example.com", "password": "correct-horse"},
+        json={"email": "cara@example.com", "password": "correct-horse-1"},
     )
     old_refresh = client.cookies.get("ll_refresh")
     assert old_refresh
@@ -84,7 +84,7 @@ def test_refresh_rotates_and_rejects_reuse(client: TestClient) -> None:
 def test_logout_without_csrf_rejected(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "dan@example.com", "password": "correct-horse"},
+        json={"email": "dan@example.com", "password": "correct-horse-1"},
     )
     response = client.post("/api/v1/auth/logout")
     assert response.status_code == 403

@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = Field(default="ll_refresh", alias="REFRESH_COOKIE_NAME")
     csrf_cookie_name: str = Field(default="ll_csrf", alias="CSRF_COOKIE_NAME")
     auth_rate_limit_per_minute: int = Field(default=20, alias="AUTH_RATE_LIMIT_PER_MINUTE")
+    # Broader API abuse control (per client IP); auth endpoints still use auth_rate_limit.
+    api_rate_limit_per_minute: int = Field(default=120, alias="API_RATE_LIMIT_PER_MINUTE")
+    usage_daily_chat_messages: int = Field(default=200, alias="USAGE_DAILY_CHAT_MESSAGES")
+    usage_daily_transcript_jobs: int = Field(
+        default=100, alias="USAGE_DAILY_TRANSCRIPT_JOBS"
+    )
     # Never enable in production — reserved for offline tests only.
     allow_test_seed: bool = Field(default=False, alias="ALLOW_TEST_SEED")
 

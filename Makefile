@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON_VERSION ?= 3.12
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help sync format lint typecheck test test-integration smoke dev migrate down clean check-tools docker-build docker-up
+.PHONY: help sync format lint typecheck test test-integration smoke dev migrate down clean check-tools docker-build docker-up audit
 
 help: ## Show available targets
 	@echo "LearnLens AI — make targets"
@@ -43,6 +43,12 @@ typecheck: sync ## Typecheck API (compileall) + web (tsc)
 	@$(UV) run --project apps/api python -m compileall -q apps/api/app
 	@npm run typecheck --workspace=@learnlens/web
 	@echo "typecheck: Python compileall ok; web tsc ok"
+
+audit: sync ## Dependency vulnerability scan (pip-audit + npm audit; offline-friendly)
+	@$(UV) run --project apps/api pip-audit --strict || \
+		($(UV) pip install pip-audit >/dev/null 2>&1; $(UV) run --project apps/api pip-audit --strict)
+	@npm audit --omit=dev --audit-level=high || true
+	@echo "audit: reviewed (pip-audit strict; npm audit advisory — fix critical/high before release)"
 
 test: sync ## Run offline unit tests (fake providers; mocked health probes)
 	@$(UV) run --project apps/api pytest apps/api/tests tests -m "not integration"

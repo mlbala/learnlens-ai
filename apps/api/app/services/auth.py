@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.policies.input_policy import InputPolicy
 from app.core.security import (
     generate_token,
     hash_password,
@@ -58,11 +59,11 @@ class AuthService:
         self._sessions = SessionRepository(db)
 
     def validate_password_policy(self, password: str) -> str | None:
-        if len(password) < MIN_PASSWORD_LENGTH:
-            return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
-        if len(password) > MAX_PASSWORD_LENGTH:
-            return f"Password must be at most {MAX_PASSWORD_LENGTH} characters."
-        return None
+        return InputPolicy.password_policy_error(
+            password,
+            min_length=MIN_PASSWORD_LENGTH,
+            max_length=MAX_PASSWORD_LENGTH,
+        )
 
     async def register(
         self,

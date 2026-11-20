@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+# Meets InputPolicy: letter + digit/special (phase 13 password hardening).
+TEST_PASSWORD = "correct-horse-1"
+
 
 def auth_csrf_headers(client: TestClient) -> dict[str, str]:
     token = client.cookies.get("ll_csrf")

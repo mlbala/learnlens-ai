@@ -1,4 +1,5 @@
 from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentRepository
+from app.db.repositories.audit import AuditEventRepository
 from app.db.repositories.chat import (
     ChatMessageRepository,
     ChatThreadRepository,
@@ -33,4 +34,5 @@ __all__ = [
     "ChatThreadRepository",
     "ChatMessageRepository",
     "MessageCitationRepository",
+    "AuditEventRepository",
 ]

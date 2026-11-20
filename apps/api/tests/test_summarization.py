@@ -24,7 +24,7 @@ FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "transcripts"
 def _register(client: TestClient, email: str) -> dict:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": "correct-horse", "name": "Summarizer"},
+        json={"email": email, "password": "correct-horse-1", "name": "Summarizer"},
     )
     assert response.status_code == 201, response.text
     return response.json()

@@ -1,4 +1,4 @@
-"""In-process sliding-window rate limiter for auth endpoints."""
+"""In-process sliding-window rate limiters for auth and general API abuse."""
 
 from __future__ import annotations
 
@@ -33,10 +33,16 @@ class SlidingWindowRateLimiter:
             self._events.clear()
 
 
-# Module-level limiter configured at app startup / tests.
+# Module-level limiters configured at app startup / tests.
 auth_rate_limiter = SlidingWindowRateLimiter(limit=20, window_seconds=60.0)
+api_rate_limiter = SlidingWindowRateLimiter(limit=120, window_seconds=60.0)
 
 
 def configure_auth_rate_limiter(*, limit: int, window_seconds: float) -> None:
     global auth_rate_limiter
     auth_rate_limiter = SlidingWindowRateLimiter(limit=limit, window_seconds=window_seconds)
+
+
+def configure_api_rate_limiter(*, limit: int, window_seconds: float) -> None:
+    global api_rate_limiter
+    api_rate_limiter = SlidingWindowRateLimiter(limit=limit, window_seconds=window_seconds)

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 def _register(client: TestClient, email: str) -> dict:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": "correct-horse", "name": email.split("@")[0]},
+        json={"email": email, "password": "correct-horse-1", "name": email.split("@")[0]},
     )
     assert response.status_code == 201, response.text
     return response.json()

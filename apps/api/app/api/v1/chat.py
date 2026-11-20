@@ -185,9 +185,14 @@ async def post_message(
             workspace_id=ctx.workspace.id,
             question=body.question,
             explanation_mode=mode,
+            actor_user_id=ctx.user.id,
         )
     except GroundedQaError as exc:
         _map_error(exc, request_id)
+
+    from app.core.policies.usage_policy import get_usage_policy
+
+    get_usage_policy().record_chat(str(ctx.user.id))
 
     cites = [_citation_out(c) for c in result.citations]
     user_out = _message_out(result.user_message)

@@ -10,7 +10,7 @@ from auth_helpers import auth_csrf_headers
 def _register(client: TestClient, email: str = "importer@example.com") -> dict:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": "correct-horse", "name": "Importer"},
+        json={"email": email, "password": "correct-horse-1", "name": "Importer"},
     )
     assert response.status_code == 201, response.text
     return response.json()

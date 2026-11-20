@@ -30,6 +30,12 @@ jobs:
           uv run ruff check apps/api tests
           uv run --project apps/api ruff check apps/api
 
+      - name: Dependency audit (Python)
+        run: |
+          uv pip install pip-audit
+          uv run --project apps/api pip-audit --strict || \
+            (echo "::warning::pip-audit reported findings — review before release"; uv run --project apps/api pip-audit)
+
       - name: Test
         run: |
           uv run --project apps/api pytest apps/api/tests tests -m "not integration"
@@ -44,3 +50,4 @@ jobs:
         run: |
           npm install --ignore-scripts
           npm run typecheck
+          npm audit --omit=dev --audit-level=high || echo "::warning::npm audit reported high+ findings"

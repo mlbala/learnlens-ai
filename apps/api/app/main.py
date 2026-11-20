@@ -1,4 +1,4 @@
-"""FastAPI application factory — health + schema/auth (phase 02)."""
+"""FastAPI application factory — health + schema/auth + security gate."""
 
 from __future__ import annotations
 
@@ -19,9 +19,13 @@ from app.api.v1 import (
     settings_providers_router,
     videos_router,
 )
+from app.core.api_abuse import ApiAbuseMiddleware
 from app.core.errors import http_exception_handler
-from app.core.rate_limit import configure_auth_rate_limiter
+from app.core.policies.audit_policy import configure_audit_policy
+from app.core.policies.usage_policy import configure_usage_policy
+from app.core.rate_limit import configure_api_rate_limiter, configure_auth_rate_limiter
 from app.core.request_id import RequestIdMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.settings import Settings, get_settings
 from app.db.session import create_engine, create_session_factory
 
@@ -41,6 +45,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         limit=settings.auth_rate_limit_per_minute,
         window_seconds=60.0,
     )
+    configure_api_rate_limiter(
+        limit=settings.api_rate_limit_per_minute,
+        window_seconds=60.0,
+    )
+    configure_usage_policy(
+        daily_chat_messages=settings.usage_daily_chat_messages,
+        daily_transcript_jobs=settings.usage_daily_transcript_jobs,
+    )
+    configure_audit_policy()
     engine = None
     if settings.database_url:
         engine = create_engine(settings)
@@ -83,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
 
     origins = settings.cors_origin_list()
+    # Middleware order: last added runs first on request.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -97,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ],
         expose_headers=["X-Request-ID"],
     )
+    app.add_middleware(ApiAbuseMiddleware, settings=settings)
+    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
     app.add_middleware(RequestIdMiddleware)
     app.add_exception_handler(HTTPException, http_exception_handler)
 
