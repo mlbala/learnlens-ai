@@ -7,6 +7,8 @@ from typing import Any, NoReturn
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from app.core.policies.privacy_policy import PrivacyPolicy
+
 
 def error_body(
     *,
@@ -18,9 +20,9 @@ def error_body(
     return {
         "error": {
             "code": code,
-            "message": message,
+            "message": PrivacyPolicy.safe_error_message(message),
             "request_id": request_id,
-            "details": details or {},
+            "details": PrivacyPolicy.redact_mapping(details or {}),
         }
     }
 

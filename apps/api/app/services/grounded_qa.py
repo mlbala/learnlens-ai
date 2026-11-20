@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.contracts import EmbeddingModel, ModelRequest, TextModel
 from app.ai.factory import build_embedding_model, build_text_model
+from app.core.policies.audit_policy import AuditRecord, get_audit_policy
+from app.core.policies.output_policy import OutputPolicy
+from app.core.policies.usage_policy import UsageQuotaExceeded, get_usage_policy
 from app.core.settings import Settings
 from app.db.models import SourceAsset, Video
 from app.db.models.chat import ChatMessage, ChatThread, MessageCitation
@@ -215,6 +218,7 @@ class GroundedQaService:
         workspace_id: uuid.UUID,
         question: str,
         explanation_mode: ExplanationMode = ExplanationMode.STANDARD,
+        actor_user_id: uuid.UUID | None = None,
     ) -> GroundedAnswerResult:
         question_clean = question.strip()
         if not question_clean:
@@ -226,8 +230,25 @@ class GroundedQaService:
                 "Question exceeds the configured input limit.",
             )
 
+        usage = get_usage_policy()
+        if actor_user_id is not None:
+            try:
+                usage.check_chat_allowed(str(actor_user_id))
+            except UsageQuotaExceeded as exc:
+                raise GroundedQaError(429, exc.code, exc.message) from exc
+
         thread = await self.get_thread(thread_id=thread_id, workspace_id=workspace_id)
         if thread is None:
+            get_audit_policy().record(
+                AuditRecord(
+                    action="authorization_denied",
+                    workspace_id=workspace_id,
+                    actor_user_id=actor_user_id,
+                    resource_type="chat_thread",
+                    resource_id=str(thread_id),
+                    metadata={"reason": "cross_tenant_or_missing"},
+                )
+            )
             raise GroundedQaError(404, "NOT_FOUND", "Resource not found.")
 
         scope_kind = thread.scope_kind  # type: ignore[assignment]
@@ -321,11 +342,27 @@ class GroundedQaService:
             )
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
+        # OutputPolicy: strip unsafe URLs / minimize PII before citation membership checks.
+        sanitized_payload = OutputPolicy.sanitize_payload_strings(
+            result.parsed if isinstance(result.parsed, dict) else {}
+        )
         validated = validate_qa_payload(
-            result.parsed,
+            sanitized_payload,
             packet,
             refusal_message=REFUSAL_MESSAGE,
         )
+        # Deterministic post-validation: never present fabricated citations as grounded.
+        if validated.dropped_citation_ids and not validated.refused:
+            get_audit_policy().record(
+                AuditRecord(
+                    action="citation_dropped",
+                    workspace_id=workspace_id,
+                    actor_user_id=actor_user_id,
+                    resource_type="chat_thread",
+                    resource_id=str(thread_id),
+                    metadata={"dropped_count": len(validated.dropped_citation_ids)},
+                )
+            )
         req_hash = _request_hash(
             question_clean,
             explanation_mode.value,
@@ -542,11 +579,12 @@ class GroundedQaService:
                 else "model"
             ),
         }
+        safe_answer = OutputPolicy.sanitize_assistant_text(validated.answer)
         assistant = await self._messages.create(
             thread_id=thread.id,
             workspace_id=workspace_id,
             role="assistant",
-            content=validated.answer,
+            content=safe_answer,
             explanation_mode=explanation_mode.value,
             provider_run_id=provider_run_id,
             confidence_label=validated.confidence_label,
@@ -575,7 +613,7 @@ class GroundedQaService:
             user_message=user_message,
             assistant_message=assistant,
             citations=citation_outs,
-            answer=validated.answer,
+            answer=safe_answer,
             claims=validated.claims,
             analogies=validated.analogies,
             unsupported=validated.unsupported,

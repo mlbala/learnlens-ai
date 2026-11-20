@@ -6,7 +6,9 @@ from collections.abc import Iterator
 
 import anyio
 import pytest
-from app.core.rate_limit import configure_auth_rate_limiter
+from app.core.policies.audit_policy import configure_audit_policy
+from app.core.policies.usage_policy import configure_usage_policy
+from app.core.rate_limit import configure_api_rate_limiter, configure_auth_rate_limiter
 from app.core.settings import Settings, clear_settings_cache
 from app.db import models as _models  # noqa: F401 — register metadata
 from app.db.base import Base
@@ -41,6 +43,9 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("ALLOW_TEST_SEED", "true")
     monkeypatch.setenv("AUTH_RATE_LIMIT_PER_MINUTE", "100")
+    monkeypatch.setenv("API_RATE_LIMIT_PER_MINUTE", "1000")
+    monkeypatch.setenv("USAGE_DAILY_CHAT_MESSAGES", "1000")
+    monkeypatch.setenv("USAGE_DAILY_TRANSCRIPT_JOBS", "1000")
     monkeypatch.setenv("YOUTUBE_METADATA_PROVIDER", "fake")
     monkeypatch.setenv("YOUTUBE_API_KEY", "")
     monkeypatch.setenv("CELERY_TASK_ALWAYS_EAGER", "true")
@@ -51,6 +56,9 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("TRANSCRIPT_JOB_MAX_ATTEMPTS", "3")
     clear_settings_cache()
     configure_auth_rate_limiter(limit=100, window_seconds=60.0)
+    configure_api_rate_limiter(limit=1000, window_seconds=60.0)
+    configure_usage_policy(daily_chat_messages=1000, daily_transcript_jobs=1000)
+    configure_audit_policy()
     # Keep Celery eager in sync with test settings (module may already be imported).
     from app.workers.celery_app import celery_app
 

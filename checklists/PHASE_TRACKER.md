@@ -17,7 +17,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 10 library/playlist/video screens | complete | e4ecede on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 30 web Vitest passed; `next build` ok; fixture library mode default; no paid APIs | authenticated live API library path optional via `NEXT_PUBLIC_LIBRARY_MODE=api` (requires session); designer screenshots not captured |
 | 11 lesson reader + chat | complete | 9a01ff7 on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 39 web Vitest passed; `next build` ok; fixture lesson/chat default; no paid APIs | designer screenshots at 375/768/1280 optional; API transcript snippet list not yet exposed (fixture snippets only) |
 | 12 notes + course synthesis | complete | ea7de36 on `dev` | `make lint` / `make typecheck` / `make test` → 143 API passed (4 deselected) + 41 web Vitest passed; fixture/fake providers only; no paid APIs | optional designer screenshots of playlist course overview at 375/768/1280 |
-| 13 guardrails/security | not started | | | |
+| 13 guardrails/security | complete | (pending commit on `dev`) | `make lint` / `make typecheck` / `uv run pytest … -m "not integration"` → 159 passed (4 deselected); web Vitest → 43 passed; security gate + injection corpus offline; no paid APIs | npm audit advisories pre-existing; live Neon `audit_events` migrate not run; UsagePolicy is process-local |
 | 14 eval/testing | not started | | | |
 | 15 observability/budgets | not started | | | |
 | 16 CI/deploy/release | not started | | | |

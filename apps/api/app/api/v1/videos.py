@@ -115,6 +115,19 @@ async def get_video(
     # Ignore any client-supplied workspace_id query/body — scope from session only.
     video = await access.get_video_for_caller(ctx, video_id)
     if video is None:
+        from app.core.policies.audit_policy import AuditRecord, get_audit_policy
+
+        get_audit_policy().record(
+            AuditRecord(
+                action="authorization_denied",
+                workspace_id=ctx.workspace.id,
+                actor_user_id=ctx.user.id,
+                resource_type="video",
+                resource_id=str(video_id),
+                request_id=getattr(request.state, "request_id", None),
+                metadata={"reason": "cross_tenant_or_missing"},
+            )
+        )
         # Fail closed: do not disclose whether the ID exists in another tenant.
         not_found(getattr(request.state, "request_id", None))
     return _video_out(video)

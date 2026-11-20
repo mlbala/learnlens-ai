@@ -15,7 +15,7 @@ def test_settings_providers_requires_auth(client: TestClient) -> None:
 def test_settings_providers_hides_secrets(client: TestClient) -> None:
     reg = client.post(
         "/api/v1/auth/register",
-        json={"email": "prov@example.com", "password": "correct-horse"},
+        json={"email": "prov@example.com", "password": "correct-horse-1"},
     )
     assert reg.status_code == 201, reg.text
 

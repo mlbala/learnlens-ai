@@ -9,10 +9,15 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.policies.audit_policy import AuditRecord, get_audit_policy
+from app.core.policies.input_policy import InputPolicy, InputPolicyViolation
+from app.core.policies.privacy_policy import PrivacyPolicy
+from app.core.policies.usage_policy import UsageQuotaExceeded, get_usage_policy
 from app.core.settings import Settings
 from app.db.models import IngestionJob, SourceAsset, Video
 from app.db.repositories import IngestionJobRepository, PlaylistRepository, VideoRepository
 from app.db.repositories.assets import SourceAssetRepository, TranscriptSegmentRepository
+from app.db.repositories.audit import AuditEventRepository
 from app.domain.job_states import JobStage, JobStatus
 from app.domain.transcript_parse import (
     SourceKind,
@@ -82,11 +87,32 @@ class TranscriptIngestService:
                 f"Transcript exceeds the {max_bytes} byte upload limit.",
             )
 
+        try:
+            safe_filename = InputPolicy.sanitize_upload_filename(filename)
+        except InputPolicyViolation as exc:
+            raise TranscriptIngestError(422, exc.code, exc.message) from exc
+
+        usage = get_usage_policy()
+        try:
+            usage.check_job_allowed(str(user_id))
+        except UsageQuotaExceeded as exc:
+            raise TranscriptIngestError(429, exc.code, exc.message) from exc
+
         video = await self._videos.get_in_workspace(
             video_id=video_id,
             workspace_id=workspace_id,
         )
         if video is None:
+            get_audit_policy().record(
+                AuditRecord(
+                    action="authorization_denied",
+                    workspace_id=workspace_id,
+                    actor_user_id=user_id,
+                    resource_type="video",
+                    resource_id=str(video_id),
+                    metadata={"reason": "cross_tenant_or_missing"},
+                )
+            )
             raise TranscriptIngestError(404, "NOT_FOUND", "Resource not found.")
 
         key = idempotency_key or self._default_idempotency_key(
@@ -113,13 +139,18 @@ class TranscriptIngestService:
             # Validate early so we fail before creating durable rows when content is bad.
             parsed = parse_transcript(
                 raw,
-                filename=filename,
+                filename=safe_filename,
                 content_type=content_type,
                 source_kind_hint=hint,
                 max_characters=self._settings.transcript_max_characters,
             )
         except TranscriptParseError as exc:
             raise TranscriptIngestError(422, exc.code, exc.message) from exc
+
+        # Score injection-like phrases for audit only — content remains untrusted data.
+        suspicion = InputPolicy.score_suspicious_content(
+            "\n".join(c.text for c in parsed.cues[:50])
+        )
 
         stored = self._storage.put_bytes(
             workspace_id=str(workspace_id),
@@ -156,6 +187,37 @@ class TranscriptIngestService:
             idempotency_key=key,
         )
 
+        usage.record_job(str(user_id))
+        audit_meta = {
+            **PrivacyPolicy.transcript_log_safe(
+                character_count=parsed.character_count,
+                cue_count=len(parsed.cues),
+            ),
+            "source_kind": parsed.source_kind.value,
+            "content_hash": parsed.content_hash,
+            "suspicious_score": suspicion.score,
+            "filename_sanitized": safe_filename,
+        }
+        get_audit_policy().record(
+            AuditRecord(
+                action="transcript_upload",
+                workspace_id=workspace_id,
+                actor_user_id=user_id,
+                resource_type="video",
+                resource_id=str(video.id),
+                metadata=audit_meta,
+            )
+        )
+        await AuditEventRepository(self._session).create(
+            action="transcript_upload",
+            workspace_id=workspace_id,
+            actor_user_id=user_id,
+            resource_type="video",
+            resource_id=str(video.id),
+            metadata=audit_meta,
+            summary="Rights-attested transcript queued",
+        )
+
         logger.info(
             "transcript_ingest_queued",
             extra={
@@ -166,6 +228,7 @@ class TranscriptIngestService:
                 "source_revision": revision,
                 "content_hash": parsed.content_hash,
                 "cue_count": len(parsed.cues),
+                "suspicious_score": suspicion.score,
             },
         )
 
