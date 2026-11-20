@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # Qdrant Cloud — required for readiness; do not run Qdrant in Docker.
     qdrant_url: str = Field(default="", alias="QDRANT_URL")
     qdrant_api_key: str = Field(default="", alias="QDRANT_API_KEY")
+    # memory = offline fake store; qdrant = Qdrant Cloud (free tier: 1 GB RAM / 4 GB disk).
+    qdrant_vector_store: str = Field(default="qdrant", alias="QDRANT_VECTOR_STORE")
+    # Explicit dense-only feature flag — never a silent hybrid fallback.
+    qdrant_dense_only: bool = Field(default=False, alias="QDRANT_DENSE_ONLY")
+    qdrant_top_k: int = Field(default=10, alias="QDRANT_TOP_K")
+    qdrant_prefetch_limit: int = Field(default=40, alias="QDRANT_PREFETCH_LIMIT")
 
     # Optional local Redis (Compose profile) or cloud Redis URL.
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
@@ -153,12 +159,24 @@ class Settings(BaseSettings):
         "deepseek_base_url",
         "youtube_api_key",
         "youtube_metadata_provider",
+        "qdrant_vector_store",
         mode="before",
     )
     @classmethod
     def _strip_optional_str(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip()
+        return value
+
+    @field_validator("qdrant_dense_only", mode="before")
+    @classmethod
+    def _coerce_qdrant_dense_only(cls, value: object) -> object:
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off", ""}:
+                return False
         return value
 
     def key_configured(self, provider: str) -> bool:

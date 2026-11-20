@@ -1,6 +1,7 @@
 """ORM models — import side effects register metadata for Alembic."""
 
 from app.db.models.identity import Session, User, Workspace, WorkspaceMembership
+from app.db.models.indexing import IndexManifest
 from app.db.models.jobs import IngestionJob, OutboxEvent
 from app.db.models.library import Playlist, PlaylistItem, Video
 from app.db.models.summaries import ProviderRun, Summary
@@ -21,4 +22,5 @@ __all__ = [
     "OutboxEvent",
     "ProviderRun",
     "Summary",
+    "IndexManifest",
 ]

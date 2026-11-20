@@ -30,6 +30,13 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite://")
     monkeypatch.setenv("QDRANT_URL", "https://example.cloud.qdrant.io")
     monkeypatch.setenv("QDRANT_API_KEY", "test-key")
+    monkeypatch.setenv("QDRANT_VECTOR_STORE", "memory")
+    monkeypatch.setenv("QDRANT_DENSE_ONLY", "false")
+    monkeypatch.setenv("QDRANT_TOP_K", "10")
+    monkeypatch.setenv("QDRANT_PREFETCH_LIMIT", "40")
+    from app.retrieval.factory import reset_memory_store
+
+    reset_memory_store()
     monkeypatch.setenv("SESSION_SECRET", "test-session-secret-not-for-prod")
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("ALLOW_TEST_SEED", "true")
