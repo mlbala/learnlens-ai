@@ -8,16 +8,17 @@ UV ?= uv
 PYTHON_VERSION ?= 3.12
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help sync format lint typecheck test test-integration eval smoke dev migrate down clean check-tools docker-build docker-up audit
+.PHONY: help sync format lint typecheck test test-integration eval smoke smoke-e2e provider-smoke licenses dev migrate down clean check-tools docker-build docker-up docker-prod-config audit
 
 help: ## Show available targets
 	@echo "LearnLens AI — make targets"
 	@echo ""
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Runtime: Python $(PYTHON_VERSION)+ via uv; Node >=20.19 for apps/web"
 	@echo "Default AI providers: fake (see .env.example). No paid API calls from make."
 	@echo "Data stores: Neon + Qdrant Cloud via env vars (no local DB volumes)."
+	@echo "Deploy docs: infra/deploy/ (do not deploy without operator permission)."
 
 check-tools: ## Verify local tooling (uv, python, node)
 	@command -v $(UV) >/dev/null || (echo "blocker: uv not found — install https://docs.astral.sh/uv/"; exit 1)
@@ -65,6 +66,19 @@ smoke: ## Opt-in smoke — API live/ready only (no paid AI)
 	@curl -fsS http://127.0.0.1:8000/health/live | head -c 400; echo
 	@curl -fsS http://127.0.0.1:8000/health/ready | head -c 400; echo
 
+smoke-e2e: sync ## Offline e2e smoke (fixture video/playlist/adversarial; fake providers)
+	@$(UV) run --project apps/api pytest apps/api/tests/test_e2e_smoke.py -q
+
+provider-smoke: ## Opt-in live provider smoke — REFUSES unless ALLOW_PAID_SMOKE=1
+	@if [ "$${ALLOW_PAID_SMOKE:-}" != "1" ]; then \
+	  echo "provider-smoke: blocked (set ALLOW_PAID_SMOKE=1 explicitly; incurs cost)"; \
+	  exit 2; \
+	fi
+	@echo "provider-smoke: not automated in phase 16 — run a single manual live call with operator keys"
+
+licenses: sync ## Refresh offline dependency license inventory
+	@$(UV) run --project apps/api python scripts/license_inventory.py
+
 dev: ## Run API (uvicorn) — set Neon/Qdrant in .env first
 	@$(UV) run --project apps/api uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
@@ -75,13 +89,18 @@ migrate-down: sync ## Downgrade one Alembic revision (Neon)
 	@cd apps/api && $(UV) run alembic downgrade -1
 
 down: ## Stop local compose services
-	@docker compose -f compose.yaml --profile app --profile redis down
+	@docker compose -f compose.yaml --profile app --profile worker --profile redis down
 
-docker-build: ## Build api + web images (no paid APIs)
+docker-build: ## Build api + web images (worker shares api image; no paid APIs)
 	@docker compose -f compose.yaml --profile app build
+	@docker compose -f compose.yaml --profile worker build
 
 docker-up: ## Run api + web containers (requires Neon/Qdrant env)
 	@docker compose -f compose.yaml --profile app up --build
+
+docker-prod-config: ## Validate compose.prod.yaml (requires env secrets; does not deploy)
+	@docker compose -f compose.prod.yaml config >/dev/null
+	@echo "compose.prod.yaml: config ok (secrets must be exported by operator)"
 
 clean: ## Remove local caches (never deletes Neon/Qdrant cloud data)
 	@rm -rf .venv apps/api/.venv .pytest_cache apps/api/.pytest_cache .ruff_cache apps/api/.ruff_cache

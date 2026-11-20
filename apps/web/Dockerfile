@@ -19,7 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     API_INTERNAL_URL=http://api:8000
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+    && apk add --no-cache curl
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
@@ -27,4 +28,6 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/public ./public
 USER app
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/ || exit 1
 CMD ["npm", "run", "start"]

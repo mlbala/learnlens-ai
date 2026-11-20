@@ -1,0 +1,128 @@
+{
+  "_comment": "Inventory of primary LearnLens dependencies for operator review. Not legal advice. Regenerate with scripts/license_inventory.py when deps change.",
+  "generated_offline": true,
+  "python_direct": [
+    {
+      "name": "fastapi",
+      "version": "0.163.1",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.54.0",
+      "license": "BSD-3-Clause",
+      "ecosystem": "python"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.14.3",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.16.3",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "SQLAlchemy",
+      "version": "2.1.9",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "alembic",
+      "version": "1.20.1",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "asyncpg",
+      "version": "0.32.0",
+      "license": "Apache-2.0",
+      "ecosystem": "python"
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "itsdangerous",
+      "version": "2.2.0",
+      "license": "BSD License",
+      "ecosystem": "python"
+    },
+    {
+      "name": "qdrant-client",
+      "version": "1.20.0",
+      "license": "Apache-2.0",
+      "ecosystem": "python"
+    },
+    {
+      "name": "openai",
+      "version": "3.55.0",
+      "license": "Apache-2.0",
+      "ecosystem": "python"
+    },
+    {
+      "name": "google-genai",
+      "version": "3.5.0",
+      "license": "Apache-2.0",
+      "ecosystem": "python"
+    },
+    {
+      "name": "celery",
+      "version": "5.7.0",
+      "license": "BSD-3-Clause",
+      "ecosystem": "python"
+    },
+    {
+      "name": "redis",
+      "version": "8.1.0",
+      "license": "MIT",
+      "ecosystem": "python"
+    },
+    {
+      "name": "python-multipart",
+      "version": "0.0.34",
+      "license": "Apache-2.0",
+      "ecosystem": "python"
+    }
+  ],
+  "javascript_highlights": [
+    {
+      "name": "next",
+      "license": "MIT",
+      "scope": "apps/web"
+    },
+    {
+      "name": "react",
+      "license": "MIT",
+      "scope": "apps/web"
+    },
+    {
+      "name": "react-dom",
+      "license": "MIT",
+      "scope": "apps/web"
+    },
+    {
+      "name": "typescript",
+      "license": "Apache-2.0",
+      "scope": "apps/web"
+    },
+    {
+      "name": "vitest",
+      "license": "MIT",
+      "scope": "apps/web (dev)"
+    },
+    {
+      "name": "tailwindcss",
+      "license": "MIT",
+      "scope": "apps/web"
+    }
+  ]
+}

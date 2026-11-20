@@ -20,7 +20,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 13 guardrails/security | complete | 3ffbbfc on `dev` | `make lint` / `make typecheck` / `uv run pytest … -m "not integration"` → 159 passed (4 deselected); web Vitest → 43 passed; security gate + injection corpus offline; no paid APIs | npm audit advisories pre-existing; live Neon `audit_events` migrate not run; UsagePolicy is process-local |
 | 14 eval/testing | complete | 1a32e26 on `dev` | `make lint` / `make typecheck` / `make test` → 164 API passed (4 deselected) + 43 web Vitest; `make eval` → PASS offline (hard gates: citation/leaks/timestamps/schema); no paid APIs | soft quality targets tracked until calibrated; reports under `artifacts/eval/` (gitignored) |
 | 15 observability/budgets | complete | fc1f3f2 on `dev` | `make lint` / `make typecheck` / `make test` → 179 API passed (4 deselected) + 44 web Vitest; fake providers only; no paid APIs | live Neon `usage_limits` migrate not run here; sample dashboard is fixture JSON not a live Grafana board |
-| 16 CI/deploy/release | not started | | | |
+| 16 CI/deploy/release | complete | pending commit on `dev` | `make lint` / `make typecheck` / `make test` / `make smoke-e2e` (see phase report) | Docker image digests not pinned; live Neon backup drill not executed here; do not deploy without operator credentials |
 | 17 OPTIONAL visual understanding | not started | | | |
 | 18 OPTIONAL tutor/quiz/graph | not started | | | |
 

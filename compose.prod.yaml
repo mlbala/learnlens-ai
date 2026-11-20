@@ -1,0 +1,140 @@
+# Production-like sample — secrets supplied externally (env / secrets manager).
+# Do NOT commit real credentials. Do not deploy without operator permission.
+#
+# Example:
+#   export DATABASE_URL=... DATABASE_URL_UNPOOLED=... QDRANT_URL=... QDRANT_API_KEY=...
+#   export SESSION_SECRET=... REDIS_URL=redis://redis:6379/0
+#   docker compose -f compose.prod.yaml up --build
+#
+# Neon + Qdrant remain cloud-hosted (no local DB volumes).
+
+name: learnlens-prod
+
+services:
+  migrate:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: learnlens-api:${IMAGE_TAG:-prod}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      DATABASE_URL_UNPOOLED: ${DATABASE_URL_UNPOOLED:-${DATABASE_URL}}
+      AI_CHAT_PROVIDER: fake
+      AI_EMBED_PROVIDER: fake
+      YOUTUBE_METADATA_PROVIDER: fake
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY}
+      RUN_MIGRATIONS: "0"
+    entrypoint: ["alembic"]
+    command: ["upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: learnlens-api:${IMAGE_TAG:-prod}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      DATABASE_URL_UNPOOLED: ${DATABASE_URL_UNPOOLED:-}
+      QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.example.com}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-fake}
+      AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-fake}
+      YOUTUBE_METADATA_PROVIDER: ${YOUTUBE_METADATA_PROVIDER:-fake}
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      COOKIE_SECURE: "true"
+      LOG_JSON: "true"
+      # Prefer one-shot migrate service; keep 0 here to avoid race on multi-replica.
+      RUN_MIGRATIONS: "0"
+      ALLOW_TEST_SEED: "false"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: learnlens-api:${IMAGE_TAG:-prod}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      QDRANT_URL: ${QDRANT_URL:?set QDRANT_URL}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?set QDRANT_API_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-fake}
+      AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-fake}
+      YOUTUBE_METADATA_PROVIDER: ${YOUTUBE_METADATA_PROVIDER:-fake}
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      RUN_MIGRATIONS: "0"
+      ALLOW_TEST_SEED: "false"
+      LOG_JSON: "true"
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app.celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=${WORKER_CONCURRENCY:-2}",
+      ]
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    image: learnlens-web:${IMAGE_TAG:-prod}
+    environment:
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Bind locally by default; override REDIS_PUBLISH_PORT or use an internal network only.
+    ports:
+      - "${REDIS_PUBLISH_PORT:-127.0.0.1:6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    # No persistent volume required for broker-only Redis in this sample.

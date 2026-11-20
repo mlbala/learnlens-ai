@@ -20,16 +20,24 @@ required=(
   apps/api/app/domain/chapter_boundaries.py
   apps/api/app/services/summarization.py
   apps/api/Dockerfile
+  apps/api/scripts/docker-entrypoint.sh
   apps/web/package.json
   apps/web/app/page.tsx
   apps/web/Dockerfile
   packages/contracts/package.json
   infra/.gitkeep
+  infra/deploy/DEPLOYMENT.md
+  infra/deploy/BACKUP_RESTORE.md
+  infra/deploy/INCIDENT_PLAYBOOK.md
+  infra/deploy/PRIVACY_AND_COMPLIANCE.md
+  infra/licenses/DEPENDENCY_LICENSES.md
+  infra/licenses/dependency-licenses.json
   fixtures/youtube/videos.json
   fixtures/youtube/playlist_pages.json
   fixtures/transcripts/sample.srt
   fixtures/transcripts/sample.vtt
   fixtures/transcripts/sample.txt
+  fixtures/transcripts/malicious_prompt.vtt
   fixtures/golden/DATASET_VERSION
   fixtures/golden/manifest.json
   fixtures/golden/corpus.json
@@ -40,8 +48,11 @@ required=(
   apps/api/app/workers/tasks.py
   apps/api/app/storage/local.py
   apps/api/app/api/v1/jobs.py
+  apps/api/tests/test_e2e_smoke.py
+  scripts/license_inventory.py
   Makefile
   compose.yaml
+  compose.prod.yaml
   .env.example
   .github/workflows/ci.yml
 )

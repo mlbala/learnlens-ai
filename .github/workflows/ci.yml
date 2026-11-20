@@ -2,12 +2,18 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
-# No cloud credentials. Offline lint + unit tests only.
+# No cloud credentials required. Offline lint + unit tests + image build only.
+# Keep AI_* and YOUTUBE_* on fake providers — never run paid smoke in CI.
+env:
+  AI_CHAT_PROVIDER: fake
+  AI_EMBED_PROVIDER: fake
+  YOUTUBE_METADATA_PROVIDER: fake
+
 jobs:
-  scaffold:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,24 +36,58 @@ jobs:
           uv run ruff check apps/api tests
           uv run --project apps/api ruff check apps/api
 
+      - name: Typecheck (Python compileall + web tsc)
+        run: |
+          uv run --project apps/api python -m compileall -q apps/api/app
+          npm install --ignore-scripts
+          npm run typecheck
+
+      - name: Migration structure check
+        run: |
+          uv run --project apps/api pytest apps/api/tests/test_migrations.py -m "not integration" -q
+
       - name: Dependency audit (Python)
         run: |
           uv pip install pip-audit
           uv run --project apps/api pip-audit --strict || \
             (echo "::warning::pip-audit reported findings — review before release"; uv run --project apps/api pip-audit)
 
-      - name: Test
+      - name: Dependency audit (npm)
+        run: |
+          npm audit --omit=dev --audit-level=high || \
+            echo "::warning::npm audit reported high+ findings — review before release"
+
+      - name: Unit + e2e smoke tests (fake providers)
         run: |
           uv run --project apps/api pytest apps/api/tests tests -m "not integration"
+          npm run test --workspace=@learnlens/web
           bash scripts/check_layout.sh
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.19.0"
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Frontend workspace install + stub checks
-        run: |
-          npm install --ignore-scripts
-          npm run typecheck
-          npm audit --omit=dev --audit-level=high || echo "::warning::npm audit reported high+ findings"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (also used as worker)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/api
+          file: ./apps/api/Dockerfile
+          push: false
+          tags: learnlens-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
+          push: false
+          tags: learnlens-web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

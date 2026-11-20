@@ -1,7 +1,10 @@
 # Local developer stack. Neon + Qdrant Cloud stay remote (no local DB volumes).
+# Secrets via .env (never commit real values). Fake AI providers by default.
+#
 # Usage:
 #   docker compose --profile redis up -d
 #   docker compose --profile app up --build
+#   docker compose --profile worker up --build   # needs redis profile too
 
 services:
   api:
@@ -15,12 +18,56 @@ services:
     environment:
       AI_CHAT_PROVIDER: fake
       AI_EMBED_PROVIDER: fake
+      YOUTUBE_METADATA_PROVIDER: fake
       ENVIRONMENT: development
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      # Eager by default locally so Redis is optional for API smoke.
+      CELERY_TASK_ALWAYS_EAGER: ${CELERY_TASK_ALWAYS_EAGER:-true}
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-0}
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     profiles:
       - app
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: learnlens-api:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AI_CHAT_PROVIDER: fake
+      AI_EMBED_PROVIDER: fake
+      YOUTUBE_METADATA_PROVIDER: fake
+      ENVIRONMENT: development
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      RUN_MIGRATIONS: "0"
+      REDIS_URL: redis://redis:6379/0
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app.celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=2",
+      ]
+    # Worker process has no HTTP server — disable image HEALTHCHECK.
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_started
+    profiles:
+      - worker
 
   web:
     build:
@@ -31,14 +78,26 @@ services:
       API_INTERNAL_URL: http://api:8000
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
     profiles:
       - app
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     profiles:
       - redis
