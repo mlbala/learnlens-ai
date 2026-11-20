@@ -32,8 +32,12 @@ def timing_is_verified(
     end_ms: int | None,
     timecode_quality: str | None,
 ) -> bool:
-    """Only original timed cues produce jump links; TXT/paste never do."""
-    if timecode_quality != "original":
+    """
+    Only original caption cues or media-derived *verified* alignment produce jump links.
+
+    ``derived_uncertain`` / ``none`` / TXT never invent exact evidence timestamps.
+    """
+    if timecode_quality not in {"original", "derived_verified"}:
         return False
     if start_ms is None or end_ms is None:
         return False

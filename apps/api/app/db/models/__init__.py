@@ -6,6 +6,7 @@ from app.db.models.identity import Session, User, Workspace, WorkspaceMembership
 from app.db.models.indexing import IndexManifest
 from app.db.models.jobs import IngestionJob, OutboxEvent
 from app.db.models.library import Playlist, PlaylistItem, Video
+from app.db.models.media import MediaAsset, MediaFrame
 from app.db.models.summaries import ProviderRun, Summary
 from app.db.models.transcript import Chapter, SourceAsset, TranscriptSegment
 from app.db.models.usage import UsageLimit
@@ -31,4 +32,6 @@ __all__ = [
     "MessageCitation",
     "AuditEvent",
     "UsageLimit",
+    "MediaAsset",
+    "MediaFrame",
 ]

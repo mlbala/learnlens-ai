@@ -13,12 +13,14 @@ from app.api.v1.schemas import (
     ChapterListResponse,
     ChapterOut,
     ImportNoticeOut,
+    MediaUploadAccepted,
     SummarizeAccepted,
     SummaryClaimOut,
     SummaryExampleOut,
     SummaryListResponse,
     SummaryOut,
     TranscriptUploadAccepted,
+    VideoDeleteResponse,
     VideoImportResponse,
     VideoListResponse,
     VideoOut,
@@ -28,8 +30,10 @@ from app.core.errors import not_found, raise_api_error
 from app.db.repositories import ChapterRepository, SummaryRepository
 from app.domain.summary_schemas import SummaryKind
 from app.services.access import AccessService
+from app.services.media_ingest import MediaIngestError, MediaIngestService
 from app.services.summarization import SummarizationError, SummarizationService
 from app.services.transcript_ingest import TranscriptIngestError, TranscriptIngestService
+from app.services.video_deletion import VideoDeletionError, VideoDeletionService
 from app.services.youtube_import import YoutubeImportService, map_youtube_error_to_http
 from app.youtube.errors import YoutubeMetadataError
 
@@ -213,6 +217,117 @@ async def upload_transcript(
         replay=result.replay,
     )
     return JSONResponse(status_code=202, content=body.model_dump(mode="json"))
+
+
+@router.post(
+    "/{video_id}/media",
+    response_model=MediaUploadAccepted,
+    status_code=202,
+)
+async def upload_media(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+    settings: SettingsDep,
+    rights_attested: Annotated[bool, Form()] = False,
+    provider_transfer_consented: Annotated[bool, Form()] = False,
+    file: Annotated[UploadFile | None, File()] = None,
+) -> JSONResponse:
+    """
+    Opt-in upload of user-owned/licensed audio or video.
+
+    Separate from YouTube URL metadata. Requires rights attestation and
+    per-provider transfer consent. No YouTube downloading.
+    """
+    request_id = getattr(request.state, "request_id", None)
+    idem = request.headers.get("Idempotency-Key")
+
+    if file is None or not file.filename:
+        raise_api_error(
+            422,
+            code="MEDIA_REQUIRED",
+            message="Provide an authorized media file upload.",
+            request_id=request_id,
+        )
+
+    max_bytes = settings.media_max_upload_bytes
+    raw = await file.read(max_bytes + 1)
+
+    service = MediaIngestService(db, settings)
+    try:
+        result = await service.ingest(
+            workspace_id=ctx.workspace.id,
+            user_id=ctx.user.id,
+            video_id=video_id,
+            raw=raw,
+            rights_attested=rights_attested,
+            provider_transfer_consented=provider_transfer_consented,
+            filename=file.filename,
+            content_type=file.content_type,
+            idempotency_key=idem,
+        )
+    except MediaIngestError as exc:
+        raise_api_error(
+            exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            request_id=request_id,
+        )
+
+    media = result.media_asset
+    quality = None
+    source_asset_id = None
+    if media is not None:
+        source_asset_id = media.source_asset_id
+        if isinstance(media.result_json, dict):
+            quality = media.result_json.get("timecode_quality")
+
+    body = MediaUploadAccepted(
+        job_id=result.job.id,
+        status=result.job.status,
+        stage=result.job.stage,
+        percent=result.job.percent,
+        media_asset_id=media.id if media else result.job.result_resource_id,
+        source_asset_id=source_asset_id or result.job.source_asset_id,
+        timecode_quality=str(quality) if quality else None,
+        media_kind=media.media_kind if media else None,
+        replay=result.replay,
+    )
+    return JSONResponse(status_code=202, content=body.model_dump(mode="json"))
+
+
+@router.delete("/{video_id}", response_model=VideoDeleteResponse)
+async def delete_video(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+    settings: SettingsDep,
+) -> VideoDeleteResponse:
+    """Delete owned video plus media blobs, frames, transcripts, and indexes."""
+    request_id = getattr(request.state, "request_id", None)
+    service = VideoDeletionService(db, settings)
+    try:
+        result = await service.delete_video(
+            workspace_id=ctx.workspace.id,
+            user_id=ctx.user.id,
+            video_id=video_id,
+        )
+    except VideoDeletionError as exc:
+        raise_api_error(
+            exc.status_code,
+            code=exc.code,
+            message=exc.message,
+            request_id=request_id,
+        )
+    return VideoDeleteResponse(
+        video_id=result.video_id,
+        media_removed=result.media_removed,
+        frames_removed=result.frames_removed,
+        storage_keys_removed=result.storage_keys_removed,
+        index_points_removed=result.index_points_removed,
+    )
 
 
 @router.get("/{video_id}/chapters", response_model=ChapterListResponse)

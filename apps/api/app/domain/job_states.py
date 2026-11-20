@@ -17,6 +17,11 @@ class JobStage(StrEnum):
     VALIDATING = "validating"
     PERSISTING = "persisting"
     SEGMENTING = "segmenting"
+    # Phase 17 media pipeline stages (opt-in authorized media only).
+    SCANNING = "scanning"
+    TRANSCRIBING = "transcribing"
+    EXTRACTING_FRAMES = "extracting_frames"
+    ALIGNING = "aligning"
     COMPLETE = "complete"
     ERROR = "error"
 
@@ -28,6 +33,7 @@ _FAIL = (JobStatus.FAILED, JobStage.ERROR)
 _TRANSITIONS: dict[tuple[str, str], set[tuple[str, str]]] = {
     (JobStatus.QUEUED, JobStage.PENDING): {
         (JobStatus.RUNNING, JobStage.VALIDATING),
+        (JobStatus.RUNNING, JobStage.SCANNING),  # media jobs
         _FAIL,
     },
     (JobStatus.RUNNING, JobStage.VALIDATING): {
@@ -41,6 +47,27 @@ _TRANSITIONS: dict[tuple[str, str], set[tuple[str, str]]] = {
         _RETRY,
     },
     (JobStatus.RUNNING, JobStage.SEGMENTING): {
+        (JobStatus.SUCCEEDED, JobStage.COMPLETE),
+        _FAIL,
+        _RETRY,
+    },
+    # Media ingest: scan → STT → frames → align → complete
+    (JobStatus.RUNNING, JobStage.SCANNING): {
+        (JobStatus.RUNNING, JobStage.TRANSCRIBING),
+        _FAIL,
+        _RETRY,
+    },
+    (JobStatus.RUNNING, JobStage.TRANSCRIBING): {
+        (JobStatus.RUNNING, JobStage.EXTRACTING_FRAMES),
+        _FAIL,
+        _RETRY,
+    },
+    (JobStatus.RUNNING, JobStage.EXTRACTING_FRAMES): {
+        (JobStatus.RUNNING, JobStage.ALIGNING),
+        _FAIL,
+        _RETRY,
+    },
+    (JobStatus.RUNNING, JobStage.ALIGNING): {
         (JobStatus.SUCCEEDED, JobStage.COMPLETE),
         _FAIL,
         _RETRY,
@@ -73,6 +100,10 @@ def stage_percent(status: str, stage: str) -> int:
         JobStage.VALIDATING: 20,
         JobStage.PERSISTING: 45,
         JobStage.SEGMENTING: 75,
+        JobStage.SCANNING: 15,
+        JobStage.TRANSCRIBING: 40,
+        JobStage.EXTRACTING_FRAMES: 65,
+        JobStage.ALIGNING: 85,
         JobStage.COMPLETE: 100,
         JobStage.ERROR: 100,
     }

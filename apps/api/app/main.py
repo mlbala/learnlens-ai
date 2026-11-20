@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_usage_policy(
         daily_chat_messages=settings.usage_daily_chat_messages,
         daily_transcript_jobs=settings.usage_daily_transcript_jobs,
+        daily_media_jobs=settings.usage_daily_media_jobs,
     )
     configure_circuit_breaker(
         failure_threshold=settings.circuit_failure_threshold,

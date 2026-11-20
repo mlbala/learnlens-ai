@@ -1,4 +1,4 @@
-"""Celery tasks for transcript ingestion and playlist synthesis jobs."""
+"""Celery tasks for transcript, media, and playlist synthesis jobs."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from app.core.observability.tracing import (
 )
 from app.core.settings import clear_settings_cache, get_settings
 from app.db.session import create_engine, create_session_factory
+from app.services.media_ingest import MediaIngestService
 from app.services.playlist_synthesis import PlaylistSynthesisService
 from app.services.transcript_ingest import TranscriptIngestService
 from app.workers.celery_app import celery_app
@@ -38,6 +39,27 @@ async def _process_job_async(job_id: uuid.UUID) -> str:
                 if job.status in {"succeeded", "failed"}:
                     break
                 # queued again after retryable failure — continue loop
+            await session.commit()
+            return final_status
+    finally:
+        await engine.dispose()
+
+
+async def _process_media_job_async(job_id: uuid.UUID) -> str:
+    clear_settings_cache()
+    settings = get_settings()
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as session:
+            service = MediaIngestService(session, settings)
+            max_attempts = settings.media_job_max_attempts
+            final_status = "unknown"
+            for _ in range(max_attempts):
+                job = await service.process_job(job_id)
+                final_status = job.status
+                if job.status in {"succeeded", "failed"}:
+                    break
             await session.commit()
             return final_status
     finally:
@@ -89,6 +111,33 @@ def process_transcript_job(self, job_id: str) -> dict[str, str]:
                 metrics.record_success("transcript")
             elif status == "failed":
                 metrics.record_failure("transcript")
+            return {"job_id": job_id, "status": status}
+    finally:
+        clear_context()
+
+
+@celery_app.task(
+    name="app.workers.tasks.process_media_job",
+    bind=True,
+    max_retries=0,
+)
+def process_media_job(self, job_id: str) -> dict[str, str]:
+    """Process authorized media ingest. Never logs raw speech/frame content."""
+    bind_from_celery_headers(_task_headers(self))
+    metrics = get_worker_metrics()
+    metrics.record_start("media")
+    try:
+        with start_span("celery.process_media_job", job_id=job_id):
+            logger.info("media_job_start", extra={"job_id": job_id})
+            status = asyncio.run(_process_media_job_async(uuid.UUID(job_id)))
+            logger.info(
+                "media_job_finish",
+                extra={"job_id": job_id, "status": status},
+            )
+            if status == "succeeded":
+                metrics.record_success("media")
+            elif status == "failed":
+                metrics.record_failure("media")
             return {"job_id": job_id, "status": status}
     finally:
         clear_context()

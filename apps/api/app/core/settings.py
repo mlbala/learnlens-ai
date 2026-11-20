@@ -169,6 +169,33 @@ class Settings(BaseSettings):
         default=True, alias="CELERY_TASK_ALWAYS_EAGER"
     )
 
+    # Opt-in authorized media pipeline (phase 17) — disabled by default; no YouTube downloads.
+    media_processing_enabled: bool = Field(
+        default=False, alias="MEDIA_PROCESSING_ENABLED"
+    )
+    media_max_upload_bytes: int = Field(
+        default=50 * 1024 * 1024, alias="MEDIA_MAX_UPLOAD_BYTES"
+    )
+    media_storage_path: str = Field(default=".data/media", alias="MEDIA_STORAGE_PATH")
+    media_job_max_attempts: int = Field(default=3, alias="MEDIA_JOB_MAX_ATTEMPTS")
+    media_max_duration_ms: int = Field(
+        default=2 * 60 * 60 * 1000, alias="MEDIA_MAX_DURATION_MS"
+    )
+    media_max_frames: int = Field(default=24, alias="MEDIA_MAX_FRAMES")
+    # CPU/cost caps per media job and per-user daily media jobs.
+    media_max_cpu_units_per_job: float = Field(
+        default=25.0, alias="MEDIA_MAX_CPU_UNITS_PER_JOB"
+    )
+    media_max_cost_usd_per_job: float = Field(
+        default=0.50, alias="MEDIA_MAX_COST_USD_PER_JOB"
+    )
+    usage_daily_media_jobs: int = Field(default=10, alias="USAGE_DAILY_MEDIA_JOBS")
+    ai_media_provider: str = Field(default="fake", alias="AI_MEDIA_PROVIDER")
+    ai_media_stt_model: str = Field(default="fake-stt-v1", alias="AI_MEDIA_STT_MODEL")
+    ai_media_vision_model: str = Field(
+        default="fake-vision-v1", alias="AI_MEDIA_VISION_MODEL"
+    )
+
     @field_validator(
         "database_url",
         "database_url_unpooled",
@@ -192,7 +219,7 @@ class Settings(BaseSettings):
             return value.strip()
         return value
 
-    @field_validator("qdrant_dense_only", mode="before")
+    @field_validator("qdrant_dense_only", "media_processing_enabled", mode="before")
     @classmethod
     def _coerce_qdrant_dense_only(cls, value: object) -> object:
         if isinstance(value, str):

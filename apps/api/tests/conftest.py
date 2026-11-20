@@ -54,10 +54,19 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("TRANSCRIPT_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))
     monkeypatch.setenv("TRANSCRIPT_MAX_CHARACTERS", "200000")
     monkeypatch.setenv("TRANSCRIPT_JOB_MAX_ATTEMPTS", "3")
+    # Phase 17 media defaults: disabled unless a test explicitly enables.
+    monkeypatch.setenv("MEDIA_PROCESSING_ENABLED", "false")
+    monkeypatch.setenv("MEDIA_STORAGE_PATH", ".data/test-media")
+    monkeypatch.setenv("AI_MEDIA_PROVIDER", "fake")
+    monkeypatch.setenv("USAGE_DAILY_MEDIA_JOBS", "100")
     clear_settings_cache()
     configure_auth_rate_limiter(limit=100, window_seconds=60.0)
     configure_api_rate_limiter(limit=1000, window_seconds=60.0)
-    configure_usage_policy(daily_chat_messages=1000, daily_transcript_jobs=1000)
+    configure_usage_policy(
+        daily_chat_messages=1000,
+        daily_transcript_jobs=1000,
+        daily_media_jobs=1000,
+    )
     configure_audit_policy()
     # Keep Celery eager in sync with test settings (module may already be imported).
     from app.workers.celery_app import celery_app

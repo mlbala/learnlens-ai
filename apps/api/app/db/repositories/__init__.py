@@ -7,6 +7,7 @@ from app.db.repositories.chat import (
 )
 from app.db.repositories.indexing import IndexManifestRepository
 from app.db.repositories.jobs import IngestionJobRepository
+from app.db.repositories.media import MediaAssetRepository, MediaFrameRepository
 from app.db.repositories.playlists import PlaylistRepository
 from app.db.repositories.sessions import SessionRepository
 from app.db.repositories.summaries import (
@@ -37,4 +38,6 @@ __all__ = [
     "MessageCitationRepository",
     "AuditEventRepository",
     "UsageLimitRepository",
+    "MediaAssetRepository",
+    "MediaFrameRepository",
 ]

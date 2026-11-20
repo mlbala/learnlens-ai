@@ -234,6 +234,30 @@ class TranscriptUploadAccepted(BaseModel):
     replay: bool = False
 
 
+class MediaUploadAccepted(BaseModel):
+    """202 response for opt-in authorized media ingestion (phase 17)."""
+
+    job_id: uuid.UUID
+    status: str
+    stage: str
+    percent: int
+    media_asset_id: uuid.UUID | None = None
+    source_asset_id: uuid.UUID | None = None
+    timecode_quality: str | None = None
+    media_kind: str | None = None
+    replay: bool = False
+
+
+class VideoDeleteResponse(BaseModel):
+    """Deletion removes media blobs, frames, source assets, and index points."""
+
+    video_id: uuid.UUID
+    media_removed: int
+    frames_removed: int
+    storage_keys_removed: int
+    index_points_removed: int
+
+
 class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -19,6 +19,7 @@ class UsageQuotaExceeded(Exception):
 class UsageLimits:
     daily_chat_messages: int
     daily_transcript_jobs: int
+    daily_media_jobs: int = 10
 
 
 class UsagePolicy:
@@ -34,6 +35,7 @@ class UsagePolicy:
         self._lock = threading.Lock()
         self._chat: dict[tuple[str, str], int] = defaultdict(int)
         self._jobs: dict[tuple[str, str], int] = defaultdict(int)
+        self._media_jobs: dict[tuple[str, str], int] = defaultdict(int)
 
     @staticmethod
     def _today() -> str:
@@ -67,15 +69,30 @@ class UsagePolicy:
         with self._lock:
             self._jobs[key] += 1
 
+    def check_media_job_allowed(self, user_id: str) -> None:
+        key = (user_id, self._today())
+        with self._lock:
+            if self._media_jobs[key] >= self._limits.daily_media_jobs:
+                raise UsageQuotaExceeded(
+                    "MEDIA_QUOTA_EXCEEDED",
+                    "Daily authorized media job quota exceeded.",
+                )
+
+    def record_media_job(self, user_id: str) -> None:
+        key = (user_id, self._today())
+        with self._lock:
+            self._media_jobs[key] += 1
+
     def reset(self) -> None:
         with self._lock:
             self._chat.clear()
             self._jobs.clear()
+            self._media_jobs.clear()
 
 
 # Module-level policy configured at app startup / tests.
 _usage_policy = UsagePolicy(
-    UsageLimits(daily_chat_messages=200, daily_transcript_jobs=100)
+    UsageLimits(daily_chat_messages=200, daily_transcript_jobs=100, daily_media_jobs=10)
 )
 
 
@@ -83,12 +100,18 @@ def get_usage_policy() -> UsagePolicy:
     return _usage_policy
 
 
-def configure_usage_policy(*, daily_chat_messages: int, daily_transcript_jobs: int) -> UsagePolicy:
+def configure_usage_policy(
+    *,
+    daily_chat_messages: int,
+    daily_transcript_jobs: int,
+    daily_media_jobs: int = 10,
+) -> UsagePolicy:
     global _usage_policy
     _usage_policy = UsagePolicy(
         UsageLimits(
             daily_chat_messages=daily_chat_messages,
             daily_transcript_jobs=daily_transcript_jobs,
+            daily_media_jobs=daily_media_jobs,
         )
     )
     return _usage_policy
