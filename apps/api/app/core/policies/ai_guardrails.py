@@ -1,10 +1,10 @@
 """Central AI guardrails — applied to every text-model call across the app.
 
-Layers (docs/06_SECURITY_GUARDRAILS.md):
-- Input: size caps + suspicious scoring (never authorize tools from text)
-- Evidence: treat packet as untrusted quoted data; no secrets in evidence
-- Output: strip unsafe URLs / minimize PII before schema/citation gates
-- No shell/browser/secret-read capabilities are exposed to models
+Layers (docs/06_SECURITY_GUARDRAILS.md + ADR-013):
+- Deterministic floor: size caps, secret-key strip, OutputPolicy, citation gates
+- Framework scanners: NeMo Guardrails / HF prompt-injection classifier (preferred)
+- Fallback: StructuredInjectionScanner when ML frameworks are not installed
+- Direct injection (user text) may BLOCK; indirect (evidence) is QUARANTINED as data
 """
 
 from __future__ import annotations
@@ -13,6 +13,11 @@ import logging
 from typing import Any
 
 from app.ai.contracts import ModelRequest, ModelResult, TextModel
+from app.core.policies.guardrail_scan import (
+    ScanChannel,
+    ScanVerdict,
+    get_guardrail_scanner,
+)
 from app.core.policies.input_policy import InputPolicy, InputPolicyViolation
 from app.core.policies.output_policy import OutputPolicy
 from app.core.policies.privacy_policy import PrivacyPolicy
@@ -37,6 +42,37 @@ _FORBIDDEN_EVIDENCE_KEYS = frozenset(
     }
 )
 
+_scanner_settings: dict[str, Any] = {
+    "backend": "structured",
+    "nemo_config_path": "",
+    "hf_model_id": "ProtectAI/deberta-v3-base-prompt-injection-v2",
+    "hf_threshold": 0.5,
+    "block_direct_injection": True,
+}
+
+
+def configure_ai_guardrails(
+    *,
+    backend: str = "structured",
+    nemo_config_path: str = "",
+    hf_model_id: str = "ProtectAI/deberta-v3-base-prompt-injection-v2",
+    hf_threshold: float = 0.5,
+    block_direct_injection: bool = True,
+) -> None:
+    """Configure scanner backend (call from app lifespan / tests)."""
+    from app.core.policies.guardrail_scan import reset_guardrail_scanner
+
+    _scanner_settings.update(
+        {
+            "backend": backend,
+            "nemo_config_path": nemo_config_path,
+            "hf_model_id": hf_model_id,
+            "hf_threshold": hf_threshold,
+            "block_direct_injection": block_direct_injection,
+        }
+    )
+    reset_guardrail_scanner()
+
 
 class AiGuardrailError(ValueError):
     def __init__(self, code: str, message: str) -> None:
@@ -46,7 +82,20 @@ class AiGuardrailError(ValueError):
 
 
 class AiGuardrails:
-    """Deterministic pre/post gates around provider-neutral TextModel calls."""
+    """Deterministic pre/post gates + framework scanners around TextModel calls."""
+
+    @staticmethod
+    def _scanner():
+        return get_guardrail_scanner(
+            backend=str(_scanner_settings["backend"]),
+            nemo_config_path=str(_scanner_settings["nemo_config_path"]),
+            hf_model_id=str(_scanner_settings["hf_model_id"]),
+            hf_threshold=float(_scanner_settings["hf_threshold"]),
+        )
+
+    @staticmethod
+    def scan_text(text: str, *, channel: ScanChannel) -> Any:
+        return AiGuardrails._scanner().scan(text, channel=channel)
 
     @staticmethod
     def enforce_user_text(
@@ -55,6 +104,7 @@ class AiGuardrails:
         max_characters: int,
         code: str = "INPUT_TOO_LARGE",
         allow_empty: bool = False,
+        scan_injection: bool = True,
     ) -> str:
         cleaned = text.strip()
         if not cleaned and not allow_empty:
@@ -63,22 +113,50 @@ class AiGuardrails:
             InputPolicy.enforce_text_size(cleaned, max_characters=max_characters, code=code)
         except InputPolicyViolation as exc:
             raise AiGuardrailError(exc.code, exc.message) from exc
-        suspicion = InputPolicy.score_suspicious_content(cleaned)
-        if suspicion.score > 0:
-            # Do not block user questions that quote malicious text — log only.
+
+        if scan_injection:
+            result = AiGuardrails.scan_text(cleaned, channel=ScanChannel.USER_DIRECT)
             logger.info(
-                "ai_input_suspicion",
+                "ai_direct_injection_scan",
                 extra={
-                    "suspicion_score": suspicion.score,
-                    "matched_count": len(suspicion.matched),
+                    "backend": result.backend,
+                    "verdict": result.verdict.value,
+                    "risk_score": result.risk_score,
+                    "finding_count": len(result.findings),
                 },
             )
+            if (
+                result.verdict == ScanVerdict.BLOCK
+                and bool(_scanner_settings["block_direct_injection"])
+            ):
+                raise AiGuardrailError(
+                    "PROMPT_INJECTION_BLOCKED",
+                    "Request blocked by prompt-injection guardrails.",
+                )
+            # Quarantine: allow but keep suspicion metadata in logs only.
+            if result.verdict == ScanVerdict.QUARANTINE:
+                logger.info(
+                    "ai_direct_injection_quarantine",
+                    extra={"backend": result.backend, "risk_score": result.risk_score},
+                )
+        else:
+            # Legacy heuristic score for uploads that must never block learning content.
+            suspicion = InputPolicy.score_suspicious_content(cleaned)
+            if suspicion.score > 0:
+                logger.info(
+                    "ai_input_suspicion",
+                    extra={
+                        "suspicion_score": suspicion.score,
+                        "matched_count": len(suspicion.matched),
+                    },
+                )
         return cleaned
 
     @staticmethod
     def sanitize_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Drop secret-like keys and redact emails from evidence text leaves."""
+        """Drop secret-like keys, redact emails, scan for indirect injection."""
         cleaned: list[dict[str, Any]] = []
+        scanner = AiGuardrails._scanner()
         for item in evidence:
             if not isinstance(item, dict):
                 continue
@@ -88,7 +166,20 @@ class AiGuardrails:
                 if key_l in _FORBIDDEN_EVIDENCE_KEYS:
                     continue
                 if key_l in {"text", "content", "snippet", "title"} and isinstance(value, str):
-                    row[key] = PrivacyPolicy.redact_text(value, redact_emails=True)
+                    redacted = PrivacyPolicy.redact_text(value, redact_emails=True)
+                    scan = scanner.scan(redacted, channel=ScanChannel.EVIDENCE_INDIRECT)
+                    if scan.verdict != ScanVerdict.ALLOW:
+                        logger.info(
+                            "ai_indirect_injection_quarantine",
+                            extra={
+                                "backend": scan.backend,
+                                "verdict": scan.verdict.value,
+                                "risk_score": scan.risk_score,
+                            },
+                        )
+                        row["injection_quarantine"] = True
+                        row["injection_backend"] = scan.backend
+                    row[key] = redacted
                 else:
                     row[key] = value
             # Opaque provenance marker for adapters / prompts.
@@ -102,7 +193,7 @@ class AiGuardrails:
         *,
         max_input_characters: int,
     ) -> ModelRequest:
-        """Cap input size and sanitize evidence before any provider call."""
+        """Cap input size, scan user text, sanitize evidence before any provider call."""
         evidence = AiGuardrails.sanitize_evidence(list(request.evidence or []))
         user_input = request.user_input or ""
         if len(user_input) > max_input_characters:
@@ -110,7 +201,25 @@ class AiGuardrails:
                 "AI_INPUT_TOO_LARGE",
                 f"Model input exceeds the {max_input_characters} character limit.",
             )
-        # Instructions stay server-authored; never merge raw user text into them.
+        # Scan assembled user_input for direct injection (chat wraps question here).
+        if user_input.strip():
+            scan = AiGuardrails.scan_text(user_input, channel=ScanChannel.USER_DIRECT)
+            if (
+                scan.verdict == ScanVerdict.BLOCK
+                and bool(_scanner_settings["block_direct_injection"])
+            ):
+                # Evidence-only purposes (summary/tutor) may embed untrusted transcript in
+                # user_input — do not block those; quarantine is enough.
+                purpose = (request.purpose or "").lower()
+                if purpose in {"grounded_qa"} or purpose.startswith("chat"):
+                    raise AiGuardrailError(
+                        "PROMPT_INJECTION_BLOCKED",
+                        "Request blocked by prompt-injection guardrails.",
+                    )
+                logger.info(
+                    "ai_purpose_injection_not_blocked",
+                    extra={"purpose": purpose, "backend": scan.backend},
+                )
         return ModelRequest(
             purpose=request.purpose,
             instructions=request.instructions,
@@ -127,6 +236,17 @@ class AiGuardrails:
     def sanitize_result(result: ModelResult) -> ModelResult:
         parsed = result.parsed if isinstance(result.parsed, dict) else {}
         safe = OutputPolicy.sanitize_payload_strings(parsed)
+        # Scan free-text answer/summary leaves for output rails.
+        for key in ("answer", "summary", "content", "explanation"):
+            val = safe.get(key)
+            if isinstance(val, str) and val.strip():
+                out_scan = AiGuardrails.scan_text(val, channel=ScanChannel.MODEL_OUTPUT)
+                if out_scan.verdict == ScanVerdict.BLOCK:
+                    logger.info(
+                        "ai_output_rail_block",
+                        extra={"backend": out_scan.backend, "field": key},
+                    )
+                    safe[key] = OutputPolicy.sanitize_assistant_text(val)
         return ModelResult(
             parsed=safe,
             usage=result.usage,

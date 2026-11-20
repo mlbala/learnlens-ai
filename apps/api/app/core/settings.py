@@ -196,6 +196,26 @@ class Settings(BaseSettings):
         default="fake-vision-v1", alias="AI_MEDIA_VISION_MODEL"
     )
 
+    # AI guardrails — NeMo / HF classifier preferred; structured fallback for offline CI.
+    # Values: structured | hf | nemo | auto
+    ai_guardrails_backend: str = Field(
+        default="structured", alias="AI_GUARDRAILS_BACKEND"
+    )
+    ai_guardrails_nemo_config: str = Field(
+        default="apps/api/guardrails/nemo",
+        alias="AI_GUARDRAILS_NEMO_CONFIG",
+    )
+    ai_guardrails_hf_model: str = Field(
+        default="ProtectAI/deberta-v3-base-prompt-injection-v2",
+        alias="AI_GUARDRAILS_HF_MODEL",
+    )
+    ai_guardrails_hf_threshold: float = Field(
+        default=0.5, alias="AI_GUARDRAILS_HF_THRESHOLD"
+    )
+    ai_guardrails_block_direct_injection: bool = Field(
+        default=True, alias="AI_GUARDRAILS_BLOCK_DIRECT_INJECTION"
+    )
+
     @field_validator(
         "database_url",
         "database_url_unpooled",
@@ -219,7 +239,12 @@ class Settings(BaseSettings):
             return value.strip()
         return value
 
-    @field_validator("qdrant_dense_only", "media_processing_enabled", mode="before")
+    @field_validator(
+        "qdrant_dense_only",
+        "media_processing_enabled",
+        "ai_guardrails_block_direct_injection",
+        mode="before",
+    )
     @classmethod
     def _coerce_qdrant_dense_only(cls, value: object) -> object:
         if isinstance(value, str):

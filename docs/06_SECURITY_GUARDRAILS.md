@@ -59,7 +59,7 @@ The system instructions say: transcripts, descriptions, retrieved snippets and s
 - `PrivacyPolicy`: remove secrets from logs, provider transfer disclosure, retention and deletion.
 - `AuditPolicy`: request IDs, events for upload, change of provider, failed authorization and deletion, without raw transcript text.
 
-Optional NeMo Guardrails or other external guardrail library can augment these controls **after** baseline tests. Do not make it the single safety perimeter; an extra model judge isn't a substitute for deterministic checks.
+**Preferred framework (ADR-014):** NVIDIA **NeMo Guardrails** (+ local HF prompt-injection classifier). Protect AI **LLM Guard is archived (July 2026)** — do not adopt. Framework scanners **augment** baseline tests; do not make them the single safety perimeter. An extra model judge is not a substitute for deterministic auth, citation, and schema checks. Offline CI uses `AI_GUARDRAILS_BACKEND=structured` (multi-signal Unicode/role/intent detector) so torch/model downloads are not required.
 
 ## 7. Security test matrix
 

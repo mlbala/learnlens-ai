@@ -23,6 +23,7 @@ from app.api.v1 import (
 from app.core.api_abuse import ApiAbuseMiddleware
 from app.core.errors import http_exception_handler
 from app.core.observability import configure_circuit_breaker, configure_structured_logging
+from app.core.policies.ai_guardrails import configure_ai_guardrails
 from app.core.policies.audit_policy import configure_audit_policy
 from app.core.policies.usage_policy import configure_usage_policy
 from app.core.quota_middleware import QuotaMiddleware
@@ -55,6 +56,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         recovery_timeout_seconds=settings.circuit_recovery_timeout_seconds,
     )
     configure_audit_policy()
+    configure_ai_guardrails(
+        backend=settings.ai_guardrails_backend,
+        nemo_config_path=settings.ai_guardrails_nemo_config,
+        hf_model_id=settings.ai_guardrails_hf_model,
+        hf_threshold=settings.ai_guardrails_hf_threshold,
+        block_direct_injection=settings.ai_guardrails_block_direct_injection,
+    )
     engine = None
     if settings.database_url:
         engine = create_engine(settings)

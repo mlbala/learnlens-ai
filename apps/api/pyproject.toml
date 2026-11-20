@@ -20,6 +20,17 @@ dependencies = [
     "python-multipart>=0.0.12",
 ]
 
+[project.optional-dependencies]
+# NVIDIA NeMo Guardrails — preferred programmable rails (no LLM Guard; archived 2026).
+guardrails = [
+    "nemoguardrails>=0.14.0",
+]
+# Local HF prompt-injection classifier (DeBERTa) used by NeMo HF rails / hf backend.
+guardrails-ml = [
+    "transformers>=4.44.0",
+    "torch>=2.4.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",

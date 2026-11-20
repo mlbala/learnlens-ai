@@ -6,6 +6,7 @@ from collections.abc import Iterator
 
 import anyio
 import pytest
+from app.core.policies.ai_guardrails import configure_ai_guardrails
 from app.core.policies.audit_policy import configure_audit_policy
 from app.core.policies.usage_policy import configure_usage_policy
 from app.core.rate_limit import configure_api_rate_limiter, configure_auth_rate_limiter
@@ -59,10 +60,18 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("MEDIA_STORAGE_PATH", ".data/test-media")
     monkeypatch.setenv("AI_MEDIA_PROVIDER", "fake")
     monkeypatch.setenv("USAGE_DAILY_MEDIA_JOBS", "100")
+    # Offline default: structured multi-signal scanner (no torch/NeMo download in CI).
+    monkeypatch.setenv("AI_GUARDRAILS_BACKEND", "structured")
+    monkeypatch.setenv("AI_GUARDRAILS_BLOCK_DIRECT_INJECTION", "true")
     clear_settings_cache()
     # Fresh high limits per test so suite growth (e.g. tutor) does not trip process limiter.
     configure_auth_rate_limiter(limit=500, window_seconds=60.0)
     configure_api_rate_limiter(limit=5000, window_seconds=60.0)
+    configure_ai_guardrails(
+        backend="structured",
+        nemo_config_path="apps/api/guardrails/nemo",
+        block_direct_injection=True,
+    )
     configure_usage_policy(
         daily_chat_messages=1000,
         daily_transcript_jobs=1000,

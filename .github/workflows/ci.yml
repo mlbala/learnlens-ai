@@ -90,6 +90,7 @@ jobs:
         run: |
           uv run --project apps/api pytest \
             apps/api/tests/test_ai_guardrails.py \
+            apps/api/tests/test_guardrail_framework.py \
             apps/api/tests/test_security_gate.py \
             apps/api/tests/test_grounded_qa.py \
             apps/api/tests/test_qa_evidence.py \

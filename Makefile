@@ -59,13 +59,14 @@ test: sync ## Run offline unit tests (fake providers; mocked health probes)
 guardrails: sync ## AI/chat guardrails + security gate (fake providers only)
 	@$(UV) run --project apps/api pytest \
 		apps/api/tests/test_ai_guardrails.py \
+		apps/api/tests/test_guardrail_framework.py \
 		apps/api/tests/test_security_gate.py \
 		apps/api/tests/test_grounded_qa.py \
 		apps/api/tests/test_qa_evidence.py \
 		apps/api/tests/test_tenant_isolation.py \
 		-m "not integration" -q
 	@npm run test --workspace=@learnlens/web -- tests/xss-escape.test.tsx tests/citations.test.ts tests/evidence-citation.test.tsx
-	@echo "guardrails: AI input/evidence/output gates + security tests ok"
+	@echo "guardrails: NeMo/HF-ready scanners + structured offline + security tests ok"
 
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
 	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration
