@@ -8,7 +8,7 @@ UV ?= uv
 PYTHON_VERSION ?= 3.12
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: help sync format lint typecheck test test-integration smoke dev migrate down clean check-tools docker-build docker-up audit
+.PHONY: help sync format lint typecheck test test-integration eval smoke dev migrate down clean check-tools docker-build docker-up audit
 
 help: ## Show available targets
 	@echo "LearnLens AI — make targets"
@@ -57,6 +57,9 @@ test: sync ## Run offline unit tests (fake providers; mocked health probes)
 
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
 	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration
+
+eval: sync ## Offline golden eval harness (fake providers; writes artifacts/eval)
+	@$(UV) run --project apps/api python -m app.eval.cli --out "$(ROOT)/artifacts/eval"
 
 smoke: ## Opt-in smoke — API live/ready only (no paid AI)
 	@curl -fsS http://127.0.0.1:8000/health/live | head -c 400; echo

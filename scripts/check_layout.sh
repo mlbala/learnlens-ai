@@ -30,6 +30,12 @@ required=(
   fixtures/transcripts/sample.srt
   fixtures/transcripts/sample.vtt
   fixtures/transcripts/sample.txt
+  fixtures/golden/DATASET_VERSION
+  fixtures/golden/manifest.json
+  fixtures/golden/corpus.json
+  fixtures/golden/expected.jsonl
+  fixtures/golden/targets.json
+  apps/api/app/eval/cli.py
   apps/api/app/domain/transcript_parse.py
   apps/api/app/workers/tasks.py
   apps/api/app/storage/local.py

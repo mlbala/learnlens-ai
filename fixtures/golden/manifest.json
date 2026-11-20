@@ -1,0 +1,22 @@
+{
+  "dataset_version": "1.0.0",
+  "fixture_data": true,
+  "license_note": "Synthetic fixture data for LearnLens offline evaluation. Not real YouTube content.",
+  "workspaces": ["workspace_a", "workspace_b"],
+  "playlists": {
+    "pl_complete": "All member videos have ready transcripts",
+    "pl_partial": "Two ready, one missing transcript"
+  },
+  "transcripts": [
+    "comm_good.vtt",
+    "python_course_01.srt",
+    "python_course_02.srt",
+    "untimed.txt",
+    "malicious_prompt.vtt",
+    "multilingual_excerpt.vtt",
+    "typo_heavy.srt"
+  ],
+  "cases_file": "expected.jsonl",
+  "targets_file": "targets.json",
+  "corpus_file": "corpus.json"
+}

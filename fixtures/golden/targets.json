@@ -1,0 +1,19 @@
+{
+  "dataset_version": "1.0.0",
+  "note": "Initial launch targets from docs/05 — proposed gates, not measured production results. Soft quality metrics are tracked until calibrated; hard gates fail the process.",
+  "hard_gates": {
+    "citation_validity": 1.0,
+    "leaked_tenant_count": 0,
+    "fabricated_timestamp_links": 0,
+    "schema_valid": true
+  },
+  "soft_targets": {
+    "retrieval_recall_at_10": 0.85,
+    "retrieval_mrr": 0.7,
+    "abstention_accuracy": 0.9,
+    "summarization_faithfulness": 0.85,
+    "summarization_coverage": 0.8,
+    "answer_completeness": 0.8,
+    "attribution_precision_manual": 0.95
+  }
+}

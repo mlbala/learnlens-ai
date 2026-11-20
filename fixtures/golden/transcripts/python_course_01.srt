@@ -1,0 +1,15 @@
+1
+00:00:01,000 --> 00:00:05,000
+Welcome to Python 101. Today we cover lists, aka dynamic arrays.
+
+2
+00:00:05,000 --> 00:00:10,000
+Use append() to add one item. Prefer list comprehensions for transforms.
+
+3
+00:00:10,000 --> 00:00:15,000
+Mutable default arguments are a common bug; use None and assign inside.
+
+4
+00:00:15,000 --> 00:00:20,000
+Big-O for append is amortized O(1). Indexing by position is O(1).

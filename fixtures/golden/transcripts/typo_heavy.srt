@@ -1,0 +1,15 @@
+1
+00:00:01,000 --> 00:00:05,000
+Recursion means a funciton calls itself with a smaller subproblem.
+
+2
+00:00:05,000 --> 00:00:10,000
+Alwyas define a base case or the call stack will overflow.
+
+3
+00:00:10,000 --> 00:00:15,000
+Memoization caches previous results to avoid re-computaton.
+
+4
+00:00:15,000 --> 00:00:20,000
+Tree traversals: preorder, inorder, and postorder are the clasic three.
