@@ -10,7 +10,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 03 provider adapters | complete | 92d215d on `dev` | `make lint` / `make typecheck` / `make test` → 50 passed offline (fake + mocked OpenAI/Gemini/DeepSeek text, OpenAI/Gemini embeddings, settings/providers, 401/429/timeout/refusal/dimension); 2 integration deselected | no live/paid provider calls; PUT `/settings/providers` deferred to later phase |
 | 04 YouTube metadata | complete | b090616 on `dev` | `make lint` / `make typecheck` / `make test` → 84 passed offline (URL/SSRF, fixture video/playlist import, multi-page order + unavailable items, idempotency, never summarized); 2 integration deselected | no live YouTube Data API calls; official client present but default provider is fake |
 | 05 authorized transcript ingestion | complete | c4504e2 on `dev` | `make lint` / `make typecheck` / `make test` → 102 passed offline (SRT/VTT exact ms, TXT null timestamps, 413/attestation/tenant, eager worker retries + idempotency); 2 integration deselected | no Redis required (CELERY_TASK_ALWAYS_EAGER); no paid APIs; media/ASR not implemented by design |
-| 06 normalization + summaries | not started | | | |
+| 06 normalization + summaries | complete | cc69c28 on `dev` | `make lint` / `make typecheck` / `make test` → 116 passed offline (chunker, evidence gate, chapters/summaries, cache, blocked-no-transcript, injection-as-data); 2 integration deselected | no paid AI calls; Qdrant indexing deferred to phase 07 |
 | 07 Qdrant indexing/search | not started | | | |
 | 08 grounded QA | not started | | | |
 | 09 UI design system | not started | | | |
