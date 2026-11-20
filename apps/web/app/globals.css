@@ -1,76 +1,120 @@
+@import "tailwindcss";
+
+/* Design tokens — docs/07_UI_UX_DESIGN_SYSTEM.md §2 (light + dark) */
 :root {
-  --bg: #f7f8fa;
-  --fg: #12141a;
-  --muted: #5c6578;
-  --accent: #1a56db;
-  --ok: #0f7a45;
-  --bad: #b42318;
-  --border: #d8dee9;
-  --radius: 8px;
-  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --foreground: #0f172a;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --primary-foreground: #ffffff;
+  --success: #15803d;
+  --success-foreground: #ffffff;
+  --warning: #b45309;
+  --warning-foreground: #ffffff;
+  --danger: #b91c1c;
+  --danger-foreground: #ffffff;
+  --ring: #1d4ed8;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-panel: 12px;
+  --sidebar-width: 260px;
+  --content-max: 1440px;
+  --text-measure: 72ch;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04);
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
-* {
+.dark {
+  --background: #0b1220;
+  --surface: #111c2d;
+  --surface-muted: #1a2740;
+  --foreground: #e5e7eb;
+  --muted-foreground: #94a3b8;
+  --border: #334155;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-foreground: #0b1220;
+  --success: #4ade80;
+  --success-foreground: #0b1220;
+  --warning: #fbbf24;
+  --warning-foreground: #0b1220;
+  --danger: #f87171;
+  --danger-foreground: #0b1220;
+  --ring: #60a5fa;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-ring: var(--ring);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-panel: var(--radius-panel);
+  --font-sans: var(--font-sans);
+  --shadow-sm: var(--shadow-sm);
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+  border-color: var(--border);
 }
 
-html,
+html {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--font);
-}
-
-main {
-  max-width: 40rem;
-  margin: 0 auto;
-  padding: 3rem 1.25rem;
-}
-
-.brand {
-  font-size: 1.75rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--accent);
-  margin: 0 0 0.5rem;
-}
-
-h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-}
-
-.lede {
-  color: var(--muted);
-  margin: 0 0 1.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 15px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.muted {
-  color: var(--muted);
-  font-size: 0.9rem;
+/* Focus-visible: WCAG-friendly rings; no random glow */
+:focus {
+  outline: none;
 }
 
-.health {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.1rem;
-  background: #fff;
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
-.health-ok {
-  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-.health-bad {
-  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
-}
-
-.health ul {
-  margin: 0.75rem 0 0;
-  padding-left: 1.1rem;
-  line-height: 1.6;
+.prose-measure {
+  max-width: var(--text-measure);
 }

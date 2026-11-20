@@ -46,6 +46,7 @@ typecheck: sync ## Typecheck API (compileall) + web (tsc)
 
 test: sync ## Run offline unit tests (fake providers; mocked health probes)
 	@$(UV) run --project apps/api pytest apps/api/tests tests -m "not integration"
+	@npm run test --workspace=@learnlens/web
 	@bash scripts/check_layout.sh
 
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env

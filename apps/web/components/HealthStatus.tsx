@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+
 type Check = { ok?: boolean; error?: string };
 
 type HealthState =
@@ -40,7 +43,10 @@ export function HealthStatus() {
         });
       } catch {
         if (!cancelled) {
-          setState({ kind: "error", message: "Could not reach local health proxy" });
+          setState({
+            kind: "error",
+            message: "Could not reach local health proxy",
+          });
         }
       }
     }
@@ -51,29 +57,46 @@ export function HealthStatus() {
   }, []);
 
   if (state.kind === "loading") {
-    return <p className="muted">Checking API connectivity…</p>;
+    return (
+      <div role="status" aria-label="Checking API connectivity" className="space-y-2">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-36" />
+      </div>
+    );
   }
+
   if (state.kind === "error") {
     return (
-      <div className="health health-bad" role="status">
-        <strong>API unreachable</strong>
-        <p className="muted">{state.message}</p>
-      </div>
+      <Alert variant="danger">
+        <AlertTitle>API unreachable</AlertTitle>
+        <AlertDescription>{state.message}</AlertDescription>
+      </Alert>
     );
   }
 
   const ok = state.httpStatus === 200 && state.status === "ok";
   return (
-    <div className={ok ? "health health-ok" : "health health-bad"} role="status">
-      <strong>{ok ? "Backend ready" : "Backend not ready"}</strong>
-      <ul>
-        <li>Neon: {state.neon?.ok ? "ok" : `fail (${state.neon?.error ?? "unknown"})`}</li>
-        <li>
-          Qdrant Cloud:{" "}
-          {state.qdrant?.ok ? "ok" : `fail (${state.qdrant?.error ?? "unknown"})`}
-        </li>
-      </ul>
-      {state.requestId ? <p className="muted">request_id: {state.requestId}</p> : null}
-    </div>
+    <Alert variant={ok ? "success" : "warning"} role="status">
+      <AlertTitle>{ok ? "Backend ready" : "Backend not ready"}</AlertTitle>
+      <AlertDescription>
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-foreground">
+          <li>
+            Neon:{" "}
+            {state.neon?.ok ? "ok" : `fail (${state.neon?.error ?? "unknown"})`}
+          </li>
+          <li>
+            Qdrant Cloud:{" "}
+            {state.qdrant?.ok
+              ? "ok"
+              : `fail (${state.qdrant?.error ?? "unknown"})`}
+          </li>
+        </ul>
+        {state.requestId ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            request_id: {state.requestId}
+          </p>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }
