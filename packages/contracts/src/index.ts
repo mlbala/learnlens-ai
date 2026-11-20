@@ -165,7 +165,7 @@ export interface ChatMessageContract {
 }
 
 export interface ScaffoldMeta {
-  phase: "10";
+  phase: "11";
   operationalEndpoints: true;
   youtubeMetadataImport: true;
   authorizedTranscriptIngest: true;
@@ -173,6 +173,7 @@ export interface ScaffoldMeta {
   chaptersAndSummaries: true;
   groundedQa: true;
   libraryScreens: true;
+  lessonReaderAndChat: true;
 }
 
 export interface PlaylistCoverageContract {

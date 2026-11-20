@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { LessonReader } from "@/components/lesson/lesson-reader";
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
 import { TranscriptImportDialog } from "@/components/library/transcript-import-dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
@@ -14,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -52,10 +52,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const needsTranscript =
     video.status === "needs_transcript" || video.status === "metadata_only";
   const unavailable = video.status === "unavailable";
-  const embeddable =
-    Boolean(video.youtube_video_id) &&
-    !unavailable &&
-    video.youtube_video_id.length === 11;
 
   return (
     <>
@@ -99,54 +95,14 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-8">
-          <div className="overflow-hidden rounded-[var(--radius-panel)] border border-border bg-surface">
-            {embeddable ? (
-              <div className="relative aspect-video w-full bg-surface-muted">
-                <iframe
-                  title={`YouTube player for ${video.title}`}
-                  className="absolute inset-0 h-full w-full"
-                  src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  loading="lazy"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                />
-              </div>
-            ) : (
-              <div className="flex aspect-video items-center justify-center bg-surface-muted px-6 text-center text-sm text-muted-foreground">
-                Official embed unavailable for this item.
-              </div>
-            )}
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Overview</CardTitle>
-              <CardDescription>
-                Chapters, summaries, Ask AI, and study notes arrive in later phases. This screen
-                shows source quality and transcript readiness only.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                Coverage: {video.coverage ?? "unknown"} · Transcript access:{" "}
-                {video.transcript_access ? "yes" : "no"}
-              </p>
-              {video.fixture_data ? (
-                <p className="text-xs">
-                  Fixture data only — titles and metadata are synthetic LearnLens fixtures, not
-                  real YouTube captions.
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          {!video.transcript_access ? (
+      {video.transcript_access ? (
+        <LessonReader video={video} />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-8">
             <EmptyState
               title="No transcript attached"
-              description="Upload a permitted transcript to unlock lesson processing. We never scrape YouTube captions."
+              description="Upload a permitted transcript to unlock the lesson reader, notes, and Ask AI. We never scrape YouTube captions."
               action={
                 <TranscriptImportDialog
                   videoId={video.id}
@@ -156,30 +112,29 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                 />
               }
             />
-          ) : null}
+          </div>
+          <aside className="space-y-4 lg:col-span-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Source quality</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Status</span>
+                  <SourceStatusBadge status={video.status} />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">YouTube ID</span>
+                  <span className="font-mono text-xs">{video.youtube_video_id}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Owner-authorized caption download is not configured in this environment.
+                </p>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
-
-        <aside className="space-y-4 lg:col-span-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Source quality</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Status</span>
-                <SourceStatusBadge status={video.status} />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">YouTube ID</span>
-                <span className="font-mono text-xs">{video.youtube_video_id}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Owner-authorized caption download is not configured in this environment.
-              </p>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      )}
     </>
   );
 }

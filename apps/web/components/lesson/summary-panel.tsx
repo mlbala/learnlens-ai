@@ -1,0 +1,163 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { EmptyState } from "@/components/patterns/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { LessonSummary } from "@/lib/lesson/types";
+import { cn } from "@/lib/utils";
+
+type SummaryPanelProps = {
+  summaries: LessonSummary[];
+  onAskAbout?: (prompt: string) => void;
+  className?: string;
+};
+
+function pickKind(items: LessonSummary[], kind: string): LessonSummary | undefined {
+  return items.find((s) => s.summary_kind === kind && s.status === "ready");
+}
+
+export function SummaryPanel({ summaries, onAskAbout, className }: SummaryPanelProps) {
+  const short = useMemo(() => pickKind(summaries, "short"), [summaries]);
+  const detailed = useMemo(
+    () => pickKind(summaries, "detailed") ?? pickKind(summaries, "technical"),
+    [summaries],
+  );
+  const [copied, setCopied] = useState(false);
+
+  if (!short && !detailed) {
+    return (
+      <EmptyState
+        title="No study notes yet"
+        description="Concise and detailed notes appear after summarization from a permitted transcript."
+        className={className}
+      />
+    );
+  }
+
+  const defaultTab = short ? "concise" : "detailed";
+
+  async function copyNotes(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <Tabs defaultValue={defaultTab}>
+        <TabsList aria-label="Notes detail">
+          <TabsTrigger value="concise" disabled={!short}>
+            Concise
+          </TabsTrigger>
+          <TabsTrigger value="detailed" disabled={!detailed}>
+            Detailed
+          </TabsTrigger>
+        </TabsList>
+        {short ? (
+          <TabsContent value="concise">
+            <NotesBody
+              summary={short}
+              onCopy={() => void copyNotes(formatNotes(short))}
+              onAskAbout={onAskAbout}
+              copied={copied}
+            />
+          </TabsContent>
+        ) : null}
+        {detailed ? (
+          <TabsContent value="detailed">
+            <NotesBody
+              summary={detailed}
+              onCopy={() => void copyNotes(formatNotes(detailed))}
+              onAskAbout={onAskAbout}
+              copied={copied}
+            />
+          </TabsContent>
+        ) : null}
+      </Tabs>
+    </div>
+  );
+}
+
+function NotesBody({
+  summary,
+  onCopy,
+  onAskAbout,
+  copied,
+}: {
+  summary: LessonSummary;
+  onCopy: () => void;
+  onAskAbout?: (prompt: string) => void;
+  copied: boolean;
+}) {
+  return (
+    <article className="space-y-4 rounded-[var(--radius-card)] border border-border bg-surface p-4">
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={onCopy}>
+          {copied ? "Copied" : "Copy notes"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => onAskAbout?.(`Explain: ${summary.key_points[0] ?? summary.summary.slice(0, 80)}`)}
+          disabled={!onAskAbout}
+        >
+          Ask about this
+        </Button>
+      </div>
+      <p className="prose-measure text-sm leading-relaxed text-foreground">{summary.summary}</p>
+      {summary.key_points.length > 0 ? (
+        <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
+          {summary.key_points.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+      ) : null}
+      {summary.claims.length > 0 ? (
+        <section aria-label="Source-backed claims" className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">Source-backed claims</h3>
+          {summary.claims.map((claim) => (
+            <div key={claim.text} className="rounded-[var(--radius-control)] bg-surface-muted px-3 py-2">
+              <div className="mb-1 flex flex-wrap gap-2">
+                <Badge variant="success">source-backed</Badge>
+              </div>
+              <p className="text-sm text-foreground">{claim.text}</p>
+            </div>
+          ))}
+        </section>
+      ) : null}
+      {summary.examples.length > 0 ? (
+        <section aria-label="AI illustrations" className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">AI illustrations (extras)</h3>
+          {summary.examples.map((ex) => (
+            <div
+              key={ex.text}
+              className="rounded-[var(--radius-control)] border border-dashed border-border px-3 py-2"
+            >
+              <div className="mb-1 flex flex-wrap gap-2">
+                <Badge variant="warning">AI-created analogy</Badge>
+                <span className="text-xs text-muted-foreground">Not source evidence</span>
+              </div>
+              <p className="text-sm text-muted-foreground">{ex.text}</p>
+            </div>
+          ))}
+        </section>
+      ) : null}
+      {summary.fixture_data ? (
+        <p className="text-xs text-muted-foreground">Fixture data only — synthetic notes, not YouTube captions.</p>
+      ) : null}
+    </article>
+  );
+}
+
+function formatNotes(summary: LessonSummary): string {
+  const lines = [summary.summary, "", ...summary.key_points.map((p) => `• ${p}`)];
+  return lines.join("\n");
+}

@@ -15,7 +15,7 @@ Update after **each** Cursor Agent phase. Do not mark complete if tests did not 
 | 08 grounded QA | complete | 0029bc8 on `dev` | `make lint` / `make typecheck` / `make test` → 138 passed offline (timed cites, invented citation reject, TXT no t=, tenant 404, abstention); 4 integration deselected | no paid AI calls; chat index still caller/test-driven via memory store (ingest→index hook remains later) |
 | 09 UI design system | complete | 023eb16 on `dev` | `make lint` / `make typecheck` / `make test` → 138 API passed (4 deselected) + 18 web Vitest passed; `next build` ok; no paid APIs | designer screenshots not captured here — verify `/` and `/design-system` at 375/768/1280 |
 | 10 library/playlist/video screens | complete | e4ecede on `dev` | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 30 web Vitest passed; `next build` ok; fixture library mode default; no paid APIs | authenticated live API library path optional via `NEXT_PUBLIC_LIBRARY_MODE=api` (requires session); designer screenshots not captured |
-| 11 lesson reader + chat | not started | | | |
+| 11 lesson reader + chat | complete | (on `dev`, merge to `main`) | `make lint` / `make typecheck` / `make test` → 139 API passed (4 deselected) + 39 web Vitest passed; `next build` ok; fixture lesson/chat default; no paid APIs | designer screenshots at 375/768/1280 optional; API transcript snippet list not yet exposed (fixture snippets only) |
 | 12 notes + course synthesis | not started | | | |
 | 13 guardrails/security | not started | | | |
 | 14 eval/testing | not started | | | |
