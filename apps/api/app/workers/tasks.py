@@ -6,6 +6,12 @@ import asyncio
 import logging
 import uuid
 
+from app.core.observability.metrics import get_worker_metrics
+from app.core.observability.tracing import (
+    bind_from_celery_headers,
+    clear_context,
+    start_span,
+)
 from app.core.settings import clear_settings_cache, get_settings
 from app.db.session import create_engine, create_session_factory
 from app.services.playlist_synthesis import PlaylistSynthesisService
@@ -56,20 +62,36 @@ async def _process_playlist_synthesis_async(job_id: uuid.UUID) -> str:
         await engine.dispose()
 
 
+def _task_headers(task) -> dict:
+    headers = getattr(task.request, "headers", None) or {}
+    return dict(headers) if headers else {}
+
+
 @celery_app.task(
     name="app.workers.tasks.process_transcript_job",
     bind=True,
     max_retries=0,  # retries are bounded inside process_job / loop above
 )
-def process_transcript_job(self, job_id: str) -> dict[str, str]:  # noqa: ARG001
+def process_transcript_job(self, job_id: str) -> dict[str, str]:
     """Process a transcript ingestion job. Never logs raw transcript content."""
-    logger.info("transcript_job_start", extra={"job_id": job_id})
-    status = asyncio.run(_process_job_async(uuid.UUID(job_id)))
-    logger.info(
-        "transcript_job_finish",
-        extra={"job_id": job_id, "status": status},
-    )
-    return {"job_id": job_id, "status": status}
+    bind_from_celery_headers(_task_headers(self))
+    metrics = get_worker_metrics()
+    metrics.record_start("transcript")
+    try:
+        with start_span("celery.process_transcript_job", job_id=job_id):
+            logger.info("transcript_job_start", extra={"job_id": job_id})
+            status = asyncio.run(_process_job_async(uuid.UUID(job_id)))
+            logger.info(
+                "transcript_job_finish",
+                extra={"job_id": job_id, "status": status},
+            )
+            if status == "succeeded":
+                metrics.record_success("transcript")
+            elif status == "failed":
+                metrics.record_failure("transcript")
+            return {"job_id": job_id, "status": status}
+    finally:
+        clear_context()
 
 
 @celery_app.task(
@@ -77,12 +99,23 @@ def process_transcript_job(self, job_id: str) -> dict[str, str]:  # noqa: ARG001
     bind=True,
     max_retries=0,
 )
-def process_playlist_synthesis_job(self, job_id: str) -> dict[str, str]:  # noqa: ARG001
+def process_playlist_synthesis_job(self, job_id: str) -> dict[str, str]:
     """Process playlist course synthesis. Never logs raw transcript content."""
-    logger.info("playlist_synthesis_job_start", extra={"job_id": job_id})
-    status = asyncio.run(_process_playlist_synthesis_async(uuid.UUID(job_id)))
-    logger.info(
-        "playlist_synthesis_job_finish",
-        extra={"job_id": job_id, "status": status},
-    )
-    return {"job_id": job_id, "status": status}
+    bind_from_celery_headers(_task_headers(self))
+    metrics = get_worker_metrics()
+    metrics.record_start("playlist_synthesis")
+    try:
+        with start_span("celery.process_playlist_synthesis_job", job_id=job_id):
+            logger.info("playlist_synthesis_job_start", extra={"job_id": job_id})
+            status = asyncio.run(_process_playlist_synthesis_async(uuid.UUID(job_id)))
+            logger.info(
+                "playlist_synthesis_job_finish",
+                extra={"job_id": job_id, "status": status},
+            )
+            if status == "succeeded":
+                metrics.record_success("playlist_synthesis")
+            elif status == "failed":
+                metrics.record_failure("playlist_synthesis")
+            return {"job_id": job_id, "status": status}
+    finally:
+        clear_context()

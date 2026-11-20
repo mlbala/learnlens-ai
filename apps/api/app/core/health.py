@@ -74,3 +74,30 @@ def check_qdrant(settings: Settings) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("qdrant_probe_failed", extra={"error_type": type(exc).__name__})
         return {"ok": False, "error": type(exc).__name__}
+
+
+def check_redis(settings: Settings) -> dict[str, Any]:
+    """
+    Probe Redis broker connectivity when workers are not eager.
+
+    Uses a lightweight TCP/socket check via redis URL parsing — no paid APIs.
+    When CELERY_TASK_ALWAYS_EAGER is true, reports skipped/ok for local offline mode.
+    """
+    if settings.celery_task_always_eager:
+        return {"ok": True, "skipped": True, "reason": "celery_eager"}
+    url = (settings.redis_url or "").strip()
+    if not url:
+        return {"ok": False, "error": "REDIS_URL not configured"}
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        import socket
+
+        with socket.create_connection((host, port), timeout=2.0):
+            return {"ok": True}
+    except Exception as exc:
+        logger.warning("redis_probe_failed", extra={"error_type": type(exc).__name__})
+        return {"ok": False, "error": type(exc).__name__}

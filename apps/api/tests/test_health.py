@@ -53,9 +53,11 @@ def test_health_live_echoes_incoming_request_id(client: TestClient) -> None:
 def test_health_ready_ok_when_probes_succeed(client: TestClient) -> None:
     neon_ok: dict[str, Any] = {"ok": True}
     qdrant_ok: dict[str, Any] = {"ok": True}
+    redis_ok: dict[str, Any] = {"ok": True, "skipped": True}
     with (
         patch("app.api.v1.health.check_neon", new=AsyncMock(return_value=neon_ok)),
         patch("app.api.v1.health.check_qdrant", return_value=qdrant_ok),
+        patch("app.api.v1.health.check_redis", return_value=redis_ok),
     ):
         response = client.get("/health/ready")
     assert response.status_code == 200
@@ -63,14 +65,18 @@ def test_health_ready_ok_when_probes_succeed(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["checks"]["neon"]["ok"] is True
     assert body["checks"]["qdrant"]["ok"] is True
+    assert "redis" in body["checks"]
+    assert "worker_metrics" in body
 
 
 def test_health_ready_503_when_neon_fails(client: TestClient) -> None:
     neon_bad: dict[str, Any] = {"ok": False, "error": "TimeoutError"}
     qdrant_ok: dict[str, Any] = {"ok": True}
+    redis_ok: dict[str, Any] = {"ok": True, "skipped": True}
     with (
         patch("app.api.v1.health.check_neon", new=AsyncMock(return_value=neon_bad)),
         patch("app.api.v1.health.check_qdrant", return_value=qdrant_ok),
+        patch("app.api.v1.health.check_redis", return_value=redis_ok),
     ):
         response = client.get("/health/ready")
     assert response.status_code == 503

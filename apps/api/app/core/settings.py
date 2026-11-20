@@ -108,6 +108,24 @@ class Settings(BaseSettings):
     usage_daily_transcript_jobs: int = Field(
         default=100, alias="USAGE_DAILY_TRANSCRIPT_JOBS"
     )
+    # Per-workspace period caps (usage_limits table) — enforced server-side.
+    usage_workspace_jobs_cap: int = Field(default=500, alias="USAGE_WORKSPACE_JOBS_CAP")
+    usage_workspace_tokens_cap: int = Field(
+        default=2_000_000, alias="USAGE_WORKSPACE_TOKENS_CAP"
+    )
+    usage_workspace_requests_cap: int = Field(
+        default=10_000, alias="USAGE_WORKSPACE_REQUESTS_CAP"
+    )
+    usage_workspace_spend_cap_usd: float = Field(
+        default=25.0, alias="USAGE_WORKSPACE_SPEND_CAP_USD"
+    )
+    # Structured JSON logs (phase 15). Set false for human-readable local dumps.
+    log_json: bool = Field(default=True, alias="LOG_JSON")
+    # Provider circuit breaker.
+    circuit_failure_threshold: int = Field(default=3, alias="CIRCUIT_FAILURE_THRESHOLD")
+    circuit_recovery_timeout_seconds: float = Field(
+        default=30.0, alias="CIRCUIT_RECOVERY_TIMEOUT_SECONDS"
+    )
     # Never enable in production — reserved for offline tests only.
     allow_test_seed: bool = Field(default=False, alias="ALLOW_TEST_SEED")
 
