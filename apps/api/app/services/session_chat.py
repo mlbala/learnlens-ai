@@ -23,6 +23,7 @@ from app.db.models.chat import ChatMessage, ChatThread
 from app.db.repositories.chat import ChatMessageRepository, ChatThreadRepository
 from app.retrieval.session_lanes import ABSTAIN_BODY, ABSTAIN_HEADING, SessionReranker
 from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
+from app.services.session_judge import SessionJudge, build_judge_request, select_judge
 from app.services.session_review import (
     ModelSessionReviewer,
     ReviewRequest,
@@ -182,12 +183,14 @@ class SessionChatService:
         text_model: TextModel | None = None,
         reranker: SessionReranker | None = None,
         reviewer: SessionReviewer | None = None,
+        judge: SessionJudge | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._text_model = text_model
         self._reranker = reranker
         self._reviewer = reviewer
+        self._session_judge = judge
         self._threads = ChatThreadRepository(session)
         self._messages = ChatMessageRepository(session)
 
@@ -322,6 +325,14 @@ class SessionChatService:
                 "LESSON_PANEL_REQUIRED",
                 "The answer needs a lesson panel.",
             )
+        await self._record_judge_score(
+            structured,
+            question=cleaned,
+            decision=packet.decision,
+            external_search=external_search,
+            passages=list(packet.passages),
+            timings=timings,
+        )
         user = await self._messages.create(
             thread_id=thread.id,
             workspace_id=workspace_id,
@@ -523,6 +534,44 @@ class SessionChatService:
                 raise ReviewUnavailable("Reviewer timed out.") from exc
             raise
         return merge_verdict(model_verdict, deterministic_reasons(request))
+
+    async def _record_judge_score(
+        self,
+        structured: dict[str, Any],
+        *,
+        question: str,
+        decision: str,
+        external_search: bool,
+        passages: list[Any],
+        timings: dict[str, tuple[int | None, int | None]],
+    ) -> None:
+        """Store rubric numbers only when a judge actually runs. The draft stays put."""
+        judge = self._active_session_judge()
+        if judge is None:
+            return
+        request = build_judge_request(
+            question=question,
+            decision=decision,
+            external_search=external_search,
+            draft=structured,
+            passages=passages,
+            timings=timings,
+        )
+        try:
+            score = await judge.score(request)
+        except Exception as exc:
+            logger.info("session_judge_skipped", extra={"error": type(exc).__name__})
+            return
+        structured["judge"] = score.as_dict()
+
+    def _active_session_judge(self) -> SessionJudge | None:
+        if self._session_judge is not None:
+            return self._session_judge
+        try:
+            model = self._chat_model()
+        except ReviewUnavailable:
+            return None
+        return select_judge(None, model)
 
     def _active_reviewer(self) -> SessionReviewer:
         if self._reviewer is not None:

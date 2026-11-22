@@ -76,7 +76,7 @@ guardrails-harness: sync ## Offline injection corpus + bounded regen-loop harnes
 test-integration: sync ## Hit Neon + Qdrant Cloud when credentials exist in env/.env
 	@$(UV) run --project apps/api pytest apps/api/tests/test_health_integration.py -m integration
 
-eval: sync ## Full offline eval suite — RAG + tutor + guardrails (fake providers)
+eval: sync ## Full offline eval suite — RAG + tutor + guardrails + judge (fake providers)
 	@$(UV) run --project apps/api python -m app.eval.cli --suite all --out "$(ROOT)/artifacts/eval"
 
 eval-rag: sync ## RAG golden eval only (hard + regression gates)

@@ -31,4 +31,46 @@ describe("AnswerView", () => {
     expect(screen.queryByText(/origin_mix/)).not.toBeInTheDocument();
     expect(screen.queryByText(/invented_timestamp/)).not.toBeInTheDocument();
   });
+
+  it("renders a lesson when no judge score is stored", () => {
+    render(
+      <AnswerView
+        content={JSON.stringify({
+          v: 1,
+          lesson: [{ heading: "Answer", body: "Leaves capture sunlight." }],
+          external: [],
+          sources: [],
+        })}
+      />,
+    );
+    expect(screen.getByText("Leaves capture sunlight.")).toBeInTheDocument();
+    expect(screen.queryByText(/faithfulness/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/relevance/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render a numeric judge score", () => {
+    render(
+      <AnswerView
+        content={JSON.stringify({
+          v: 1,
+          lesson: [{ heading: "Answer", body: "Leaves capture sunlight." }],
+          external: [],
+          sources: [],
+          judge: {
+            relevance: 0.17,
+            faithfulness: 0.28,
+            source_precision: 0.39,
+            fabricated_timestamp: true,
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("Leaves capture sunlight.")).toBeInTheDocument();
+    expect(screen.queryByText("0.17")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.28")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.39")).not.toBeInTheDocument();
+    expect(screen.queryByText(/faithfulness/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/source precision/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fabricated/i)).not.toBeInTheDocument();
+  });
 });

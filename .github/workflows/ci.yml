@@ -131,7 +131,7 @@ jobs:
           uv sync --python 3.12
           uv sync --python 3.12 --project apps/api
 
-      - name: Offline eval suite (RAG + tutor + guardrails)
+      - name: Offline eval suite (RAG + tutor + guardrails + judge)
         env:
           AI_CHAT_PROVIDER: fake
           AI_EMBED_PROVIDER: fake

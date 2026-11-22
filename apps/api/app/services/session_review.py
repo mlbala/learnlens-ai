@@ -96,6 +96,11 @@ def is_retired_chat_model(model: str) -> bool:
     return _RETIRED_GEMINI.search(model or "") is not None
 
 
+def draft_fabricates_timestamp(request: ReviewRequest) -> bool:
+    """True when the draft states a time the kept video rows do not store."""
+    return _invented_times(request)
+
+
 def withheld_answer() -> dict[str, Any]:
     return {
         "v": 1,

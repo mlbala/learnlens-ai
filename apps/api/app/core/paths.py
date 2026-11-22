@@ -22,11 +22,14 @@ def repo_root() -> Path:
     `/app/fixtures/...`, so this returns `/app` there.
     """
     start = Path(__file__).resolve().parent
-    for candidate in (start, *start.parents):
-        if (candidate / "compose.yaml").is_file():
+    candidates = (start, *start.parents)
+    # Prefer the checkout that has compose.yaml or .git. apps/api also has
+    # fixtures/youtube for the image, and that nearer copy must not hide the
+    # monorepo golden set.
+    for candidate in candidates:
+        if (candidate / "compose.yaml").is_file() or (candidate / ".git").exists():
             return candidate
-        if (candidate / ".git").exists():
-            return candidate
+    for candidate in candidates:
         if (candidate / "fixtures" / "youtube").is_dir():
             return candidate
         if (candidate / "fixtures" / "golden").is_dir():
