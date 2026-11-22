@@ -113,6 +113,14 @@ class FakeTextAdapter:
         if purpose == "session_review":
             return {"accept": True, "reasons": []}
 
+        if purpose == "session_judge":
+            return {
+                "relevance": 1.0,
+                "faithfulness": 1.0,
+                "source_precision": 1.0,
+                "fabricated_timestamp": False,
+            }
+
         if purpose == "lesson_followup":
             external: list[dict[str, str]] = []
             if "external_search: on" in request.user_input:

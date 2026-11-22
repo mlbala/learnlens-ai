@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             include_rag=True,
             include_tutor=True,
             include_guardrails=True,
+            include_judge=True,
         )
         label = "eval-suite"
     elif args.suite == "tutor":
@@ -57,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
             include_rag=False,
             include_tutor=True,
             include_guardrails=False,
+            include_judge=False,
         )
         label = "eval-tutor"
     else:
@@ -66,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
             include_rag=False,
             include_tutor=False,
             include_guardrails=True,
+            include_judge=False,
         )
         label = "eval-guardrails"
 

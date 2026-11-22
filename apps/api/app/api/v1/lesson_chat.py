@@ -33,8 +33,9 @@ router = APIRouter(prefix="/api/v1/lesson-chat", tags=["lesson-chat"])
 def _service(request: Request, db: DbSession, settings: SettingsDep) -> SessionChatService:
     reranker = getattr(request.app.state, "session_reranker", None)
     reviewer = getattr(request.app.state, "session_reviewer", None)
+    judge = getattr(request.app.state, "session_judge", None)
     typed: SessionReranker | None = reranker if reranker is not None else None
-    return SessionChatService(db, settings, reranker=typed, reviewer=reviewer)
+    return SessionChatService(db, settings, reranker=typed, reviewer=reviewer, judge=judge)
 
 
 def _fail(exc: SessionChatError, request_id: str | None) -> None:

@@ -1,4 +1,4 @@
-"""Full offline eval suite — RAG golden + guardrails harness + tutor practice."""
+"""Full offline eval suite — RAG golden + guardrails harness + tutor + judge."""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ def run_eval_suite(
     include_guardrails: bool = True,
     include_tutor: bool = True,
     include_rag: bool = True,
+    include_judge: bool = True,
 ) -> SuiteReport:
     out = report_dir or default_report_dir()
     out.mkdir(parents=True, exist_ok=True)
@@ -78,6 +79,23 @@ def run_eval_suite(
                 f"guardrails:{f}" for f in (gr.payload.get("gate_failures") or ["failed"])
             )
 
+    if include_judge:
+        from app.eval.judge_eval import run_judge_eval
+
+        judged = run_judge_eval()
+        sections["judge"] = {
+            "passed": judged["passed"],
+            "case_count": judged["case_count"],
+            "failing_cases": judged["failing_cases"],
+            "hard_gates": judged["hard_gates"],
+            "soft_metrics": judged["soft_metrics"],
+            "cases": judged["cases"],
+            "gate_failures": judged["gate_failures"],
+            "notes": judged["notes"],
+        }
+        if not judged["passed"]:
+            failures.extend(f"judge:{item}" for item in (judged["gate_failures"] or ["failed"]))
+
     passed = len(failures) == 0
     stamp = datetime.now(UTC).isoformat()
     payload: dict[str, Any] = {
@@ -90,6 +108,7 @@ def run_eval_suite(
         "notes": [
             "Offline only: FakeEmbeddingAdapter + structured guardrails + tutor phrase cards.",
             "Hard RAG gates + calibrated regression gates + guardrails corpus + tutor grounding.",
+            "Judge cases use the fixture rubric. Relevance is not a hard gate.",
             "Not a learning-efficacy claim — practice/attribution proxies only.",
         ],
     }
