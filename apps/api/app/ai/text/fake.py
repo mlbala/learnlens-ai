@@ -110,6 +110,25 @@ class FakeTextAdapter:
         if purpose == "tutor_quiz":
             return _tutor_quiz_fixture(evidence_ids, request)
 
+        if purpose == "lesson_followup":
+            external: list[dict[str, str]] = []
+            if "external_search: on" in request.user_input:
+                external = [
+                    {
+                        "heading": "What it is",
+                        "body": "Fixture outside note that is not the video.",
+                    }
+                ]
+            return {
+                "lesson": [
+                    {
+                        "heading": "Answer",
+                        "body": "Fixture lesson answer about the previous lesson panel.",
+                    }
+                ],
+                "external": external,
+            }
+
         # Generic fixture — still marked as fixture data, not YouTube content.
         return {
             "result": "fixture_data",
@@ -232,15 +251,14 @@ def _playlist_summary_fixture(evidence: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _tutor_quiz_fixture(
-    evidence_ids: list[str], request: ModelRequest
-) -> dict[str, Any]:
+def _tutor_quiz_fixture(evidence_ids: list[str], request: ModelRequest) -> dict[str, Any]:
     """Deterministic practice deck — fixture_data, cites only packet evidence IDs."""
     eid = evidence_ids[0] if evidence_ids else "seg_fixture_01"
     eid2 = evidence_ids[1] if len(evidence_ids) > 1 else eid
-    wants_ta = "ta" in (request.user_input or "").lower() or "tamil" in (
-        request.instructions or ""
-    ).lower()
+    wants_ta = (
+        "ta" in (request.user_input or "").lower()
+        or "tamil" in (request.instructions or "").lower()
+    )
     presentation = {
         "en": {
             "prompt": "What should you do before coding?",
@@ -288,9 +306,7 @@ def _tutor_quiz_fixture(
                 "item_kind": "quiz",
                 "prompt": "Which action is recommended first?",
                 "answer": "Ask clarifying questions.",
-                "explanation": (
-                    "Like checking a recipe before cooking — an AI illustration."
-                ),
+                "explanation": ("Like checking a recipe before cooking — an AI illustration."),
                 "explanation_origin": "ai_generated_illustration",
                 "choices": [
                     "Ask clarifying questions.",

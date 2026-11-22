@@ -61,6 +61,7 @@ class ChatMessage(Base):
     confidence_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
     unsupported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     content_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    external_search_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

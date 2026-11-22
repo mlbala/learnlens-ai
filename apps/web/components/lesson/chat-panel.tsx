@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { AnswerView } from "@/components/lesson/answer-view";
 import { EvidenceCitation } from "@/components/lesson/evidence-citation";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { ErrorState } from "@/components/patterns/error-state";
@@ -30,8 +31,8 @@ type ChatPanelProps = {
 };
 
 const MODES: { value: ExplanationMode; label: string }[] = [
-  { value: "simple", label: "Explain simply" },
-  { value: "standard", label: "Standard" },
+  { value: "simple", label: "Brief" },
+  { value: "standard", label: "Detailed" },
   { value: "technical", label: "Technical" },
 ];
 
@@ -49,6 +50,8 @@ export function ChatPanel({
   const modeId = useId();
   const [question, setQuestion] = useState("");
   const [mode, setMode] = useState<ExplanationMode>("standard");
+  const [externalSearch, setExternalSearch] = useState(true);
+  const searchId = useId();
   const [pendingLocal, setPendingLocal] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -102,17 +105,19 @@ export function ChatPanel({
 
   const messages = messagesQuery.data ?? [];
   const busy = pendingLocal || post.isPending;
+  const composerReady = !threadQuery.isLoading && !threadQuery.isError;
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || !threadId || busy) return;
+    if (!trimmed || !composerReady || busy) return;
     setLastError(null);
     setPendingLocal(true);
     try {
       await post.mutateAsync({
-        threadId,
+        threadId: threadId ?? "",
         question: trimmed,
         explanationMode: mode,
+        externalSearch,
       });
       setQuestion("");
       await messagesQuery.refetch();
@@ -148,6 +153,17 @@ export function ChatPanel({
             ))}
           </select>
         </div>
+        <label htmlFor={searchId} className="flex min-h-10 items-center gap-2 pb-1 text-sm text-foreground">
+          <input
+            id={searchId}
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={externalSearch}
+            onChange={(e) => setExternalSearch(e.target.checked)}
+            disabled={busy}
+          />
+          Search academic papers and official docs
+        </label>
       </div>
 
       {messages.length === 0 && !busy ? (
@@ -165,7 +181,7 @@ export function ChatPanel({
                   size="sm"
                   className="h-auto justify-start whitespace-normal py-2 text-left"
                   onClick={() => void send(q)}
-                  disabled={busy || !threadId}
+                  disabled={busy || !composerReady}
                 >
                   {q}
                 </Button>
@@ -187,6 +203,9 @@ export function ChatPanel({
         aria-relevant="additions"
         tabIndex={0}
       >
+        {threadQuery.isLoading || (Boolean(threadId) && messagesQuery.isLoading && messages.length === 0) ? (
+          <p className="text-sm text-muted-foreground">Loading conversation…</p>
+        ) : null}
         {messages.map((msg) => (
           <ChatBubble
             key={msg.id}
@@ -200,7 +219,9 @@ export function ChatPanel({
             className="rounded-[var(--radius-card)] border border-border bg-surface-muted px-3 py-2 text-sm text-muted-foreground"
             data-testid="chat-pending"
           >
-            Waiting for a grounded answer… (streaming-ready; no fake typing)
+            {externalSearch
+              ? "Searching papers and official docs, then writing a detailed explanation…"
+              : "Writing a detailed explanation from the lesson…"}
           </div>
         ) : null}
       </div>
@@ -238,15 +259,15 @@ export function ChatPanel({
           rows={3}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          disabled={busy || !threadId}
-          placeholder="Ask a question grounded in the permitted transcript…"
+          disabled={busy || !composerReady}
+          placeholder="Ask about this lesson…"
           className="w-full resize-y rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            Answers use server citations only. API keys never appear in the browser.
+            Detailed answers use the lesson. The checkbox adds papers and official documentation.
           </p>
-          <Button type="submit" disabled={busy || !threadId || !question.trim()}>
+          <Button type="submit" disabled={busy || !composerReady || !question.trim()}>
             Send
           </Button>
         </div>
@@ -277,16 +298,29 @@ function ChatBubble({
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {isUser ? "You" : "Tutor"}
         </span>
-        {!isUser && message.confidence_label ? (
+        {!isUser && message.confidence_label && message.confidence_label !== "model" ? (
           <Badge variant={message.unsupported ? "warning" : "success"}>
             {message.unsupported ? "not covered" : message.confidence_label}
           </Badge>
         ) : null}
+        {isUser && typeof message.external_search_enabled === "boolean" ? (
+          <Badge variant="secondary">{message.external_search_enabled ? "Search on" : "Search off"}</Badge>
+        ) : null}
         {!isUser && message.explanation_mode ? (
-          <Badge variant="secondary">{message.explanation_mode}</Badge>
+          <Badge variant="secondary">
+            {message.explanation_mode === "simple"
+              ? "Brief"
+              : message.explanation_mode === "technical"
+                ? "Technical"
+                : "Detailed"}
+          </Badge>
         ) : null}
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+      {isUser ? (
+        <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{message.content}</p>
+      ) : (
+        <AnswerView content={message.content} structured={message.content_json} />
+      )}
 
       {!isUser && message.analogies.length > 0 ? (
         <div className="mt-2 space-y-2">

@@ -720,3 +720,79 @@ class LearningHistorySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     learning_history_limit: int = Field(ge=1, le=100)
+
+
+class LessonChatSectionIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    heading: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=8_000)
+
+
+class LessonChatSourceIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(min_length=1, max_length=500)
+    url: str = Field(min_length=8, max_length=2_048)
+    kind: str = Field(default="other", pattern="^(paper|official|other)$")
+    provider: str = Field(pattern="^(tavily|semantic_scholar|openalex)$")
+
+
+class LessonChatAnswerIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    lesson: list[LessonChatSectionIn] = Field(default_factory=list, max_length=8)
+    external: list[LessonChatSectionIn] = Field(default_factory=list, max_length=8)
+    sources: list[LessonChatSourceIn] = Field(default_factory=list, max_length=8)
+
+
+class PostLessonChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=8_000)
+    explanation_mode: str = Field(default="standard", pattern="^(simple|standard|technical)$")
+    external_search: bool = True
+    answer: LessonChatAnswerIn | None = None
+
+
+class PrepareLessonChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_search: bool = True
+
+
+class LessonChatMessageOut(BaseModel):
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    workspace_id: uuid.UUID
+    role: str
+    content: str
+    explanation_mode: str | None = None
+    external_search_enabled: bool | None = None
+    content_json: dict[str, Any] | None = None
+    confidence_label: str | None = None
+    unsupported: bool = False
+    created_at: datetime
+
+
+class PrepareLessonChatResponse(BaseModel):
+    thread_id: uuid.UUID | None = None
+    packed_history: str
+    segment_ids: list[uuid.UUID]
+
+
+class LessonChatStateResponse(BaseModel):
+    thread: ChatThreadOut | None = None
+    messages: list[LessonChatMessageOut]
+    segment_ids: list[uuid.UUID]
+
+
+class PostLessonChatResponse(BaseModel):
+    thread: ChatThreadOut
+    user_message: LessonChatMessageOut
+    assistant_message: LessonChatMessageOut
+    segment_ids: list[uuid.UUID]
+
+
+class LessonChatMessageListResponse(BaseModel):
+    items: list[LessonChatMessageOut]

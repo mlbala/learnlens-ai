@@ -49,6 +49,25 @@ class ChatThreadRepository:
         )
         return result.scalar_one_or_none()
 
+    async def find_for_scope(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        scope_kind: str,
+        scope_id: uuid.UUID,
+    ) -> ChatThread | None:
+        result = await self._session.execute(
+            select(ChatThread)
+            .where(
+                ChatThread.workspace_id == workspace_id,
+                ChatThread.scope_kind == scope_kind,
+                ChatThread.scope_id == scope_id,
+            )
+            .order_by(ChatThread.created_at.asc(), ChatThread.id.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
 
 class ChatMessageRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -66,6 +85,7 @@ class ChatMessageRepository:
         confidence_label: str | None = None,
         unsupported: bool = False,
         content_json: dict[str, Any] | None = None,
+        external_search_enabled: bool | None = None,
     ) -> ChatMessage:
         row = ChatMessage(
             thread_id=thread_id,
@@ -77,6 +97,7 @@ class ChatMessageRepository:
             confidence_label=confidence_label,
             unsupported=unsupported,
             content_json=content_json,
+            external_search_enabled=external_search_enabled,
         )
         self._session.add(row)
         await self._session.flush()
@@ -128,6 +149,26 @@ class ChatMessageRepository:
                 ][:limit]
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_recent(
+        self,
+        *,
+        thread_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        limit: int = 32,
+    ) -> list[ChatMessage]:
+        result = await self._session.execute(
+            select(ChatMessage)
+            .where(
+                ChatMessage.thread_id == thread_id,
+                ChatMessage.workspace_id == workspace_id,
+            )
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+            .limit(limit)
+        )
+        rows = list(result.scalars().all())
+        rows.reverse()
+        return rows
 
 
 class MessageCitationRepository:

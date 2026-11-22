@@ -3,6 +3,8 @@
  * Aligned with packages/contracts and apps/api schemas.
  */
 
+import type { TutorAnswer } from "@/lib/lesson/answer";
+
 export type ExplanationMode = "simple" | "standard" | "technical";
 
 export type LessonChapter = {
@@ -103,6 +105,10 @@ export type ChatMessage = {
   citations: Citation[];
   provider_run_id?: string | null;
   created_at: string;
+  /** Structured tutor cards. Plain text stays in content. */
+  content_json?: TutorAnswer | null;
+  /** Live checkbox stored on the user turn. */
+  external_search_enabled?: boolean | null;
   /** Streaming-ready UI hint — never invents completion. */
   stream_state?: "idle" | "pending" | "complete" | "error";
 };

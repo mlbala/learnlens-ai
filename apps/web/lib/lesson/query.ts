@@ -25,7 +25,7 @@ export function useLessonThread(videoId: string, opts?: { enabled?: boolean }) {
   const client = getLessonClient();
   return useQuery({
     queryKey: lessonKeys.thread(videoId),
-    queryFn: () => client.ensureThread(videoId),
+    queryFn: () => client.readThread(videoId),
     enabled: Boolean(videoId) && (opts?.enabled ?? true),
     staleTime: Infinity,
   });
@@ -48,10 +48,12 @@ export function usePostChatMessage(videoId: string) {
       threadId: string;
       question: string;
       explanationMode: ExplanationMode;
-    }) => client.postMessage(input),
-    onSuccess: async (_data, vars) => {
-      await qc.invalidateQueries({ queryKey: lessonKeys.messages(vars.threadId) });
+      externalSearch?: boolean;
+    }) => client.postMessage({ ...input, videoId }),
+    onSuccess: async (data) => {
+      const threadId = data.user_message.thread_id;
       await qc.invalidateQueries({ queryKey: lessonKeys.thread(videoId) });
+      await qc.invalidateQueries({ queryKey: lessonKeys.messages(threadId) });
     },
   });
 }

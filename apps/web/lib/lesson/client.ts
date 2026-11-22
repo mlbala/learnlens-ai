@@ -3,6 +3,7 @@
  * Never exposes API keys; never invents timed citations.
  */
 
+import { asTutorAnswer } from "@/lib/lesson/answer";
 import {
   appendFixtureExchange,
   fixtureGetOrCreateThread,
@@ -30,9 +31,11 @@ export interface LessonClient {
   readonly mode: LessonClientMode;
   getLessonBundle(videoId: string): Promise<LessonBundle>;
   ensureThread(videoId: string): Promise<ChatThread>;
+  readThread(videoId: string): Promise<ChatThread | null>;
   listMessages(threadId: string): Promise<ChatMessage[]>;
   postMessage(input: {
     threadId: string;
+    videoId?: string;
     question: string;
     explanationMode: ExplanationMode;
     externalSearch?: boolean;
@@ -132,23 +135,95 @@ export class FixtureLessonClient implements LessonClient {
     return fixtureGetOrCreateThread(videoId);
   }
 
+  async readThread(videoId: string): Promise<ChatThread | null> {
+    const video = await getLibraryClient().getVideo(videoId);
+    if (!isDurableLesson(video)) return fixtureGetOrCreateThread(videoId);
+    const res = await fetch(`/api/lesson-chat/videos/${videoId}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const body = (await res.json().catch(() => null)) as {
+      thread?: ChatThread | null;
+      error?: { code?: string; message?: string };
+    } | null;
+    if (!res.ok) {
+      throw new LessonApiError(
+        res.status,
+        body?.error?.code ?? "CHAT_ERROR",
+        body?.error?.message ?? "Could not load this lesson's conversation.",
+      );
+    }
+    return body?.thread ?? null;
+  }
+
   async listMessages(threadId: string): Promise<ChatMessage[]> {
-    return fixtureListMessages(threadId);
+    if (fixtureThreadScope(threadId)) return fixtureListMessages(threadId);
+    const res = await fetch(`/api/lesson-chat/threads/${threadId}/messages`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const body = (await res.json().catch(() => null)) as {
+      items?: Record<string, unknown>[];
+      error?: { code?: string; message?: string };
+    } | null;
+    if (!res.ok) {
+      throw new LessonApiError(
+        res.status,
+        body?.error?.code ?? "CHAT_ERROR",
+        body?.error?.message ?? "Could not load this conversation.",
+      );
+    }
+    return (body?.items ?? []).map(mapStoredMessage);
   }
 
   async postMessage(input: {
     threadId: string;
+    videoId?: string;
     question: string;
     explanationMode: ExplanationMode;
     externalSearch?: boolean;
   }): Promise<PostChatResult> {
     try {
-      const videoId = fixtureThreadScope(input.threadId);
+      const videoId = input.videoId || fixtureThreadScope(input.threadId);
       const video = videoId ? await getLibraryClient().getVideo(videoId).catch(() => null) : null;
       const lesson = video?.metadata_json?.gemini_lesson as
         | { transcript?: string; summary?: string }
         | undefined;
       const transcript = lesson?.transcript || lesson?.summary || "";
+      if (videoId && isDurableLesson(video) && transcript) {
+        const res = await fetch("/api/lesson-chat", {
+          method: "POST",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            videoId,
+            question: input.question,
+            transcript,
+            title: video?.title,
+            explanationMode: input.explanationMode,
+            externalSearch: Boolean(input.externalSearch),
+          }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          user_message?: Record<string, unknown>;
+          assistant_message?: Record<string, unknown>;
+          error?: { code?: string; message?: string };
+        } | null;
+        if (!res.ok || !body?.user_message || !body.assistant_message) {
+          throw new LessonApiError(
+            res.status || 502,
+            body?.error?.code ?? "GEMINI_ASK_FAILED",
+            body?.error?.message ?? "Gemini could not answer.",
+          );
+        }
+        return {
+          user_message: mapStoredMessage(body.user_message),
+          assistant_message: mapStoredMessage(body.assistant_message),
+          unsupported: false,
+          confidence_label: "model",
+          explanation_mode: input.explanationMode,
+        };
+      }
       if (transcript) {
         const res = await fetch("/api/gemini-ask", {
           method: "POST",
@@ -245,6 +320,10 @@ export class HttpLessonClient implements LessonClient {
     };
   }
 
+  async readThread(videoId: string): Promise<ChatThread | null> {
+    return this.ensureThread(videoId);
+  }
+
   async ensureThread(videoId: string): Promise<ChatThread> {
     const csrf = readCookie("ll_csrf");
     const headers: Record<string, string> = {
@@ -304,6 +383,34 @@ function deriveStarters(summaries: LessonSummary[]): string[] {
   const short = summaries.find((s) => s.summary_kind === "short");
   const points = short?.key_points?.filter(Boolean).slice(0, 3) ?? [];
   return points.map((p) => `Explain: ${p}`);
+}
+
+function isDurableLesson(
+  video: { fixture_data?: boolean; metadata_json?: Record<string, unknown> | null } | null,
+): boolean {
+  if (!video || video.fixture_data !== false) return false;
+  const lesson = video.metadata_json?.gemini_lesson as { transcript?: string; summary?: string } | undefined;
+  return Boolean(lesson && (lesson.transcript || lesson.summary));
+}
+
+function mapStoredMessage(row: Record<string, unknown>): ChatMessage {
+  return {
+    id: String(row.id),
+    thread_id: String(row.thread_id),
+    workspace_id: String(row.workspace_id),
+    role: String(row.role),
+    content: String(row.content ?? ""),
+    explanation_mode: (row.explanation_mode as ChatMessage["explanation_mode"]) ?? null,
+    confidence_label: (row.confidence_label as string | null) ?? null,
+    unsupported: Boolean(row.unsupported),
+    claims: [],
+    analogies: [],
+    citations: [],
+    created_at: String(row.created_at ?? ""),
+    content_json: asTutorAnswer(row.content_json),
+    external_search_enabled:
+      typeof row.external_search_enabled === "boolean" ? row.external_search_enabled : null,
+  };
 }
 
 function readCookie(name: string): string | null {
