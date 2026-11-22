@@ -23,7 +23,7 @@ export function AppSidebar() {
       </div>
       <div className="space-y-2 border-t border-border px-4 py-3">
         <p className="text-xs text-muted-foreground">
-          Turn supported transcripts into lessons and cited answers.
+          Paste a YouTube link. Gemini builds the lesson from the public video.
         </p>
         <Link
           href="/design-system"

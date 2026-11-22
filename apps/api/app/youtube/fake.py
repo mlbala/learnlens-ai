@@ -6,11 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.core.paths import repo_root
 from app.youtube.contracts import PlaylistItemMeta, PlaylistMeta, VideoMeta
 from app.youtube.errors import YoutubeNotFound
 
-# fixtures/youtube at repo root: fake.py → youtube → app → api → apps → root
-_DEFAULT_FIXTURES = Path(__file__).resolve().parents[4] / "fixtures" / "youtube"
+# Monorepo `fixtures/youtube` or Docker `/app/fixtures/youtube`
+_DEFAULT_FIXTURES = repo_root() / "fixtures" / "youtube"
 
 
 def _load_json(path: Path) -> dict[str, Any]:

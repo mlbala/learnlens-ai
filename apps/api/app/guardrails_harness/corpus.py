@@ -30,8 +30,9 @@ class CorpusFile(BaseModel):
 
 
 def default_corpus_path() -> Path:
-    # apps/api/app/guardrails_harness -> repo root fixtures/security
-    return Path(__file__).resolve().parents[4] / "fixtures" / "security" / "injection_corpus.jsonl"
+    from app.core.paths import repo_root
+
+    return repo_root() / "fixtures" / "security" / "injection_corpus.jsonl"
 
 
 def load_corpus(path: Path | None = None) -> list[CorpusCase]:

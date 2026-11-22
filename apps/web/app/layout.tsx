@@ -7,6 +7,8 @@ import { AppShell } from "@/components/shell/app-shell";
 
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

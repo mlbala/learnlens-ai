@@ -18,7 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLessonBundle } from "@/lib/lesson/query";
 import type { VideoRecord } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,6 @@ type LessonReaderProps = {
 export function LessonReader({ video, className }: LessonReaderProps) {
   const [seekRequest, setSeekRequest] = useState<SeekRequest | null>(null);
   const [draftQuestion, setDraftQuestion] = useState<string | null>(null);
-  const [mobileTab, setMobileTab] = useState("notes");
 
   const bundleQuery = useLessonBundle(video.id, {
     enabled: video.transcript_access,
@@ -43,7 +41,7 @@ export function LessonReader({ video, className }: LessonReaderProps) {
 
   const askAbout = useCallback((prompt: string) => {
     setDraftQuestion(prompt);
-    setMobileTab("chat");
+    document.getElementById("ask-ai")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   if (!video.transcript_access) {
@@ -79,81 +77,27 @@ export function LessonReader({ video, className }: LessonReaderProps) {
   const snippets = bundle?.snippets ?? [];
   const starters = bundle?.starter_questions ?? [];
   const fixturePlayer = Boolean(video.fixture_data);
-  const showMobileChat = mobileTab === "chat";
 
   return (
     <div className={cn("space-y-6", className)}>
       <div className="grid gap-6 lg:grid-cols-12">
-        <div className={cn("space-y-6", showMobileChat ? "max-lg:hidden" : "", "lg:col-span-8")}>
+        <div className="order-1 lg:col-span-7">
           <YoutubePlayer
             youtubeVideoId={video.youtube_video_id}
             title={video.title}
             seekRequest={seekRequest}
             fixturePlaceholder={fixturePlayer}
           />
-
-          <div className="hidden space-y-6 lg:block">
-            <section aria-labelledby="lesson-chapters-heading" className="space-y-3">
-              <h2 id="lesson-chapters-heading" className="text-lg font-semibold text-foreground">
-                Chapters
-              </h2>
-              <ChapterTimeline chapters={chapters} onSeek={requestSeek} />
-            </section>
-
-            <section aria-labelledby="lesson-notes-heading" className="space-y-3">
-              <h2 id="lesson-notes-heading" className="text-lg font-semibold text-foreground">
-                Study notes
-              </h2>
-              <SummaryPanel summaries={summaries} onAskAbout={askAbout} />
-            </section>
-
-            <section aria-labelledby="lesson-transcript-heading" className="space-y-3">
-              <h2 id="lesson-transcript-heading" className="text-lg font-semibold text-foreground">
-                Transcript snippets
-              </h2>
-              <TranscriptPanel snippets={snippets} onSeek={requestSeek} />
-            </section>
-          </div>
-
-          <div className="lg:hidden">
-            <Tabs value={mobileTab} onValueChange={setMobileTab}>
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-                <TabsTrigger value="chapters">Chapters</TabsTrigger>
-                <TabsTrigger value="notes">Notes</TabsTrigger>
-                <TabsTrigger value="transcript">Transcript</TabsTrigger>
-                <TabsTrigger value="chat">Ask AI</TabsTrigger>
-              </TabsList>
-              <TabsContent value="chapters">
-                <ChapterTimeline chapters={chapters} onSeek={requestSeek} />
-              </TabsContent>
-              <TabsContent value="notes">
-                <SummaryPanel summaries={summaries} onAskAbout={askAbout} />
-              </TabsContent>
-              <TabsContent value="transcript">
-                <TranscriptPanel snippets={snippets} onSeek={requestSeek} />
-              </TabsContent>
-            </Tabs>
-          </div>
         </div>
 
-        {/* Single ChatPanel instance — side panel on lg, full-width drawer on small */}
-        <aside
-          className={cn(
-            "space-y-4 lg:col-span-4",
-            showMobileChat ? "block" : "hidden lg:block",
-          )}
-        >
-          <div className="lg:hidden">
-            <Tabs value="chat" onValueChange={setMobileTab}>
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-                <TabsTrigger value="chapters">Chapters</TabsTrigger>
-                <TabsTrigger value="notes">Notes</TabsTrigger>
-                <TabsTrigger value="transcript">Transcript</TabsTrigger>
-                <TabsTrigger value="chat">Ask AI</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <Card className="hidden lg:block">
+        <aside className="order-2 space-y-4 lg:sticky lg:top-4 lg:col-span-5 lg:col-start-8 lg:row-span-3 lg:row-start-1 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+          <section aria-labelledby="lesson-notes-heading" className="space-y-3">
+            <h2 id="lesson-notes-heading" className="text-lg font-semibold text-foreground">
+              Study notes
+            </h2>
+            <SummaryPanel summaries={summaries} onAskAbout={askAbout} />
+          </section>
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Source quality</CardTitle>
             </CardHeader>
@@ -167,12 +111,19 @@ export function LessonReader({ video, className }: LessonReaderProps) {
                 <span className="font-mono text-xs">{video.youtube_video_id}</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Owner-authorized caption download is not configured in this environment.
+                {fixturePlayer
+                  ? "Fixture data only."
+                  : "Gemini built this lesson from the public YouTube video."}
               </p>
             </CardContent>
           </Card>
-          <div className="max-h-[calc(100vh-6rem)] overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 lg:sticky lg:top-4">
-            <h2 className="mb-3 text-lg font-semibold text-foreground">Ask AI</h2>
+        </aside>
+
+        <section id="ask-ai" aria-labelledby="ask-ai-heading" className="order-3 scroll-mt-20 space-y-3 lg:col-span-7">
+          <h2 id="ask-ai-heading" className="text-lg font-semibold text-foreground">
+            Ask AI
+          </h2>
+          <div className="rounded-[var(--radius-panel)] border border-border bg-surface p-4">
             <ChatPanel
               videoId={video.id}
               youtubeVideoId={video.youtube_video_id}
@@ -183,7 +134,22 @@ export function LessonReader({ video, className }: LessonReaderProps) {
               onSeek={requestSeek}
             />
           </div>
-        </aside>
+        </section>
+
+        <div className="order-4 space-y-6 lg:col-span-7">
+          <section aria-labelledby="lesson-chapters-heading" className="space-y-3">
+            <h2 id="lesson-chapters-heading" className="text-lg font-semibold text-foreground">
+              Chapters
+            </h2>
+            <ChapterTimeline chapters={chapters} onSeek={requestSeek} />
+          </section>
+          <section aria-labelledby="lesson-transcript-heading" className="space-y-3">
+            <h2 id="lesson-transcript-heading" className="text-lg font-semibold text-foreground">
+              Transcript snippets
+            </h2>
+            <TranscriptPanel snippets={snippets} onSeek={requestSeek} />
+          </section>
+        </div>
       </div>
 
       {chapters.length === 0 && summaries.length === 0 && snippets.length === 0 ? (

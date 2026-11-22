@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { LessonReader } from "@/components/lesson/lesson-reader";
+import { YoutubePlayer } from "@/components/lesson/youtube-player";
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
 import { TranscriptImportDialog } from "@/components/library/transcript-import-dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
@@ -61,21 +62,23 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
         actions={
           <div className="flex flex-wrap gap-2">
             <SourceStatusBadge status={video.status} />
-            <TranscriptImportDialog
-              videoId={video.id}
-              videoTitle={video.title}
-              disabled={unavailable}
-              disabledReason="Unavailable videos cannot accept transcripts."
-            />
+            {video.transcript_access ? null : (
+              <TranscriptImportDialog
+                videoId={video.id}
+                videoTitle={video.title}
+                disabled={unavailable}
+                disabledReason="Unavailable videos cannot accept transcripts."
+              />
+            )}
             <Button asChild variant="outline">
               <Link href="/videos">Back to videos</Link>
             </Button>
           </div>
         }
       />
-      <FixtureModeBanner mode={mode} />
+      {video.fixture_data ? <FixtureModeBanner mode={mode} /> : null}
 
-      {needsTranscript ? (
+      {needsTranscript && video.fixture_data ? (
         <Alert variant="warning" className="mb-6">
           <AlertTitle>Transcript needed</AlertTitle>
           <AlertDescription>
@@ -100,6 +103,11 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
+            <YoutubePlayer
+              youtubeVideoId={video.youtube_video_id}
+              title={video.title}
+              fixturePlaceholder={Boolean(video.fixture_data)}
+            />
             <EmptyState
               title="No transcript attached"
               description="Upload a permitted transcript to unlock the lesson reader, notes, and Ask AI. We never scrape YouTube captions."

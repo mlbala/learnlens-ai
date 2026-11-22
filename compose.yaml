@@ -16,9 +16,15 @@ services:
       - path: .env
         required: false
     environment:
-      AI_CHAT_PROVIDER: fake
-      AI_EMBED_PROVIDER: fake
-      YOUTUBE_METADATA_PROVIDER: fake
+      # Defaults stay fake; set AI_* in .env to use OpenAI/Gemini/DeepSeek (paid).
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-fake}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-fake-chat-v1}
+      AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-fake}
+      AI_EMBED_MODEL: ${AI_EMBED_MODEL:-fake-embed-v1}
+      AI_EMBED_DIMENSIONS: ${AI_EMBED_DIMENSIONS:-64}
+      AI_CHAT_MODEL_ALLOWLIST: ${AI_CHAT_MODEL_ALLOWLIST:-fake-chat-v1}
+      AI_EMBED_MODEL_ALLOWLIST: ${AI_EMBED_MODEL_ALLOWLIST:-fake-embed-v1}
+      YOUTUBE_METADATA_PROVIDER: ${YOUTUBE_METADATA_PROVIDER:-fake}
       ENVIRONMENT: development
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       # Eager by default locally so Redis is optional for API smoke.
@@ -44,9 +50,14 @@ services:
       - path: .env
         required: false
     environment:
-      AI_CHAT_PROVIDER: fake
-      AI_EMBED_PROVIDER: fake
-      YOUTUBE_METADATA_PROVIDER: fake
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-fake}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-fake-chat-v1}
+      AI_EMBED_PROVIDER: ${AI_EMBED_PROVIDER:-fake}
+      AI_EMBED_MODEL: ${AI_EMBED_MODEL:-fake-embed-v1}
+      AI_EMBED_DIMENSIONS: ${AI_EMBED_DIMENSIONS:-64}
+      AI_CHAT_MODEL_ALLOWLIST: ${AI_CHAT_MODEL_ALLOWLIST:-fake-chat-v1}
+      AI_EMBED_MODEL_ALLOWLIST: ${AI_EMBED_MODEL_ALLOWLIST:-fake-embed-v1}
+      YOUTUBE_METADATA_PROVIDER: ${YOUTUBE_METADATA_PROVIDER:-fake}
       ENVIRONMENT: development
       CELERY_TASK_ALWAYS_EAGER: "false"
       RUN_MIGRATIONS: "0"
@@ -76,6 +87,10 @@ services:
     image: learnlens-web:local
     environment:
       API_INTERNAL_URL: http://api:8000
+      AI_CHAT_PROVIDER: ${AI_CHAT_PROVIDER:-fake}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     ports:
       - "3000:3000"
     healthcheck:

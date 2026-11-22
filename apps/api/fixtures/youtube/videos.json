@@ -1,0 +1,69 @@
+{
+  "_comment": "Synthetic fixture data — not real YouTube content or transcripts.",
+  "videos": {
+    "vidPublic01": {
+      "title": "Fixture lecture 1: Active listening (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "duration_seconds": 600,
+      "availability": "public",
+      "thumbnail_url": null,
+      "description_preview": "Fixture data only."
+    },
+    "vidPublic02": {
+      "title": "Fixture lecture 2: Clarifying questions (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "duration_seconds": 720,
+      "availability": "public",
+      "thumbnail_url": null,
+      "description_preview": "Fixture data only."
+    },
+    "vidPublic03": {
+      "title": "Fixture lecture 3: Feedback loops (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "duration_seconds": 540,
+      "availability": "public",
+      "thumbnail_url": null,
+      "description_preview": "Fixture data only."
+    },
+    "vidPublic04": {
+      "title": "Fixture lecture 4: Conflict basics (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "duration_seconds": 480,
+      "availability": "public",
+      "thumbnail_url": null,
+      "description_preview": "Fixture data only."
+    },
+    "vidPublic05": {
+      "title": "Fixture lecture 5: Closing conversations (synthetic)",
+      "channel_title": "LearnLens Fixtures",
+      "duration_seconds": 510,
+      "availability": "public",
+      "thumbnail_url": null,
+      "description_preview": "Fixture data only."
+    },
+    "vidPrivate9": {
+      "title": "",
+      "channel_title": null,
+      "duration_seconds": null,
+      "availability": "private",
+      "thumbnail_url": null,
+      "description_preview": null
+    },
+    "vidDeleted1": {
+      "title": "",
+      "channel_title": null,
+      "duration_seconds": null,
+      "availability": "deleted",
+      "thumbnail_url": null,
+      "description_preview": null
+    },
+    "vidUnavail1": {
+      "title": "",
+      "channel_title": null,
+      "duration_seconds": null,
+      "availability": "unavailable",
+      "thumbnail_url": null,
+      "description_preview": null
+    }
+  }
+}

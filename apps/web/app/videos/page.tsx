@@ -7,7 +7,7 @@ export default function VideosPage() {
     <LibraryBrowser
       initialKind="videos"
       title="Videos"
-      description="Imported video metadata and transcript readiness."
+      description="Paste a public YouTube link. Gemini builds the lesson from the video."
     />
   );
 }

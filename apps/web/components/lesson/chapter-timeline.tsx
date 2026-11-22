@@ -17,7 +17,7 @@ export function ChapterTimeline({ chapters, onSeek, className }: ChapterTimeline
     return (
       <EmptyState
         title="No chapters yet"
-        description="Chapters appear after a permitted transcript is summarized. Timecodes are shown only when verified."
+        description="No verified timestamps for this video."
         className={className}
       />
     );

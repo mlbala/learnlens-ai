@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.core.paths import repo_root
 from app.core.settings import Settings
 from app.storage.base import StorageAdapter
 from app.storage.local import LocalMockStorage
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = repo_root()
 
 
 def _resolve_root(path_str: str) -> Path:

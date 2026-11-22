@@ -7,8 +7,14 @@ type AppShellProps = {
   children: ReactNode;
 };
 
+function runtimeEnv(name: string): string {
+  return (process.env[name] ?? "").trim();
+}
+
 /** Authenticated application chrome — desktop sidebar + topbar + mobile nav. */
 export function AppShell({ children }: AppShellProps) {
+  const provider = runtimeEnv("AI_CHAT_PROVIDER") || "gemini";
+  const configured = provider === "gemini" ? Boolean(runtimeEnv("GEMINI_API_KEY")) : true;
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <a
@@ -19,7 +25,7 @@ export function AppShell({ children }: AppShellProps) {
       </a>
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppTopbar />
+        <AppTopbar providerLabel={provider} providerConfigured={configured} />
         <main
           id="main-content"
           className="mx-auto w-full max-w-[var(--content-max)] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"

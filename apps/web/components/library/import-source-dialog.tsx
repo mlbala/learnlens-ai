@@ -90,8 +90,7 @@ export function ImportSourceDialog({
         <DialogHeader>
           <DialogTitle>Add source</DialogTitle>
           <DialogDescription id={hintId}>
-            Paste a YouTube video or playlist URL. Metadata import never grants transcript access
-            by itself — upload a permitted transcript after import.
+            Paste a public YouTube video URL. Gemini watches it and builds the lesson. No transcript upload.
           </DialogDescription>
         </DialogHeader>
         <form id={formId} className="space-y-4" onSubmit={(e) => void onSubmit(e)} noValidate>
@@ -103,7 +102,7 @@ export function ImportSourceDialog({
               type="url"
               inputMode="url"
               autoComplete="off"
-              placeholder="https://www.youtube.com/watch?v=vidPublic01"
+              placeholder="https://www.youtube.com/watch?v="
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               aria-invalid={formError ? true : undefined}
@@ -155,7 +154,7 @@ export function ImportSourceDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={importMutation.isPending || !url.trim()}>
-              {importMutation.isPending ? "Importing…" : "Import metadata"}
+              {importMutation.isPending ? "Gemini is reading the video…" : "Build lesson"}
             </Button>
           </DialogFooter>
         </form>

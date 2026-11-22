@@ -31,7 +31,7 @@ export function SummaryPanel({ summaries, onAskAbout, className }: SummaryPanelP
     return (
       <EmptyState
         title="No study notes yet"
-        description="Concise and detailed notes appear after summarization from a permitted transcript."
+        description="Notes appear here after Gemini finishes the lesson."
         className={className}
       />
     );

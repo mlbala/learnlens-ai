@@ -34,8 +34,11 @@ COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser fixtures ./fixtures
 COPY --chown=appuser:appuser scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p /app/.data/transcripts /app/.data/media \
+    && chown -R appuser:appuser /app/.data
 USER appuser
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

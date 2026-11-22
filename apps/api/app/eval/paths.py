@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.core.paths import repo_root as monorepo_root
+
 
 def repo_root() -> Path:
-    # apps/api/app/eval/paths.py -> parents[4] = monorepo root
-    return Path(__file__).resolve().parents[4]
+    return monorepo_root()
 
 
 def golden_root(override: Path | None = None) -> Path:

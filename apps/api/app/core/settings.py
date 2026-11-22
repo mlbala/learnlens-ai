@@ -8,9 +8,10 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# settings.py → core → app → api → apps → repo root
-_API_ROOT = Path(__file__).resolve().parents[2]
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+from app.core.paths import api_package_root, repo_root
+
+_API_ROOT = api_package_root()
+_REPO_ROOT = repo_root()
 
 
 class Settings(BaseSettings):

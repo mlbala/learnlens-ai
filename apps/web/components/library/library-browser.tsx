@@ -139,7 +139,7 @@ export function LibraryBrowser({
               {videos.length === 0 ? (
                 <EmptyState
                   title="No videos match"
-                  description="Import a fixture video URL or clear filters."
+                  description="Paste a public YouTube link, or clear the filters."
                   action={<ImportSourceDialog triggerLabel="Import video" />}
                 />
               ) : (
@@ -198,7 +198,7 @@ export function LibraryBrowser({
               {playlists.length === 0 ? (
                 <EmptyState
                   title="No playlists yet"
-                  description="Import a fixture playlist URL to see ordered coverage."
+                  description="Playlist import is not available yet. Add a single public YouTube video instead."
                 />
               ) : (
                 <ul

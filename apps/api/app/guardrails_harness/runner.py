@@ -36,7 +36,9 @@ class GuardrailsHarnessReport:
 
 
 def _default_report_dir() -> Path:
-    return Path(__file__).resolve().parents[4] / "artifacts" / "guardrails"
+    from app.core.paths import repo_root
+
+    return repo_root() / "artifacts" / "guardrails"
 
 
 def _channel(raw: str) -> ScanChannel:

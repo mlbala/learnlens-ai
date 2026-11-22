@@ -36,7 +36,7 @@ export function DashboardHome() {
     <>
       <PageHeader
         title="Your learning workspace"
-        description="Turn supported video transcripts into lessons, summaries and cited answers."
+        description="Paste a public YouTube link. Gemini builds the lesson from the video."
         actions={<ImportSourceDialog />}
       />
       <FixtureModeBanner mode={mode} />
@@ -87,7 +87,7 @@ export function DashboardHome() {
           {recent.filter((v) => v.status === "ready").length === 0 ? (
             <EmptyState
               title="No ready lessons yet"
-              description="Import a source and upload a permitted transcript to start studying."
+              description="Paste a public YouTube link. Gemini builds the lesson from the video."
               action={<ImportSourceDialog triggerLabel="Add source" />}
             />
           ) : (
@@ -148,7 +148,7 @@ export function DashboardHome() {
         {recent.length === 0 ? (
           <EmptyState
             title="Library is empty"
-            description="Use Add source with a fixture YouTube URL to populate the demo library."
+            description="Paste a public YouTube link. Gemini builds the lesson from the video."
           />
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
@@ -180,7 +180,7 @@ export function DashboardHome() {
         <CardHeader>
           <CardTitle>Infrastructure</CardTitle>
           <CardDescription>
-            Connectivity check for Neon Postgres and Qdrant Cloud (fixture shell).
+            Connectivity check for Neon Postgres and Qdrant Cloud.
           </CardDescription>
         </CardHeader>
         <CardContent>
