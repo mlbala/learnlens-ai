@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from app.ai.contracts import ModelRequest, ModelResult, ModelUsage
 from app.ai.text.fake import FakeTextAdapter
 from app.core.policies.ai_guardrails import GuardedTextModel, configure_ai_guardrails

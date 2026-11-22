@@ -46,8 +46,7 @@ typecheck: sync ## Typecheck API (compileall) + web (tsc)
 	@echo "typecheck: Python compileall ok; web tsc ok"
 
 audit: sync ## Dependency vulnerability scan (pip-audit + npm audit; offline-friendly)
-	@$(UV) run --project apps/api pip-audit --strict || \
-		($(UV) pip install pip-audit >/dev/null 2>&1; $(UV) run --project apps/api pip-audit --strict)
+	@$(UV) run --project apps/api --with pip-audit pip-audit --skip-editable
 	@npm audit --omit=dev --audit-level=high || true
 	@echo "audit: reviewed (pip-audit strict; npm audit advisory — fix critical/high before release)"
 

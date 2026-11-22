@@ -48,9 +48,10 @@ jobs:
 
       - name: Dependency audit (Python)
         run: |
-          uv pip install pip-audit
-          uv run --project apps/api pip-audit --strict || \
-            (echo "::warning::pip-audit reported findings — review before release"; uv run --project apps/api pip-audit)
+          # --with installs pip-audit into the API env. A root-level
+          # `uv pip install` cannot be spawned by `uv run --project apps/api`.
+          # --skip-editable ignores the local package, which is not on PyPI.
+          uv run --project apps/api --with pip-audit pip-audit --skip-editable
 
       - name: Dependency audit (npm)
         run: |
