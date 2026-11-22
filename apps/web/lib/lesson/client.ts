@@ -4,6 +4,7 @@
  */
 
 import { asTutorAnswer } from "@/lib/lesson/answer";
+import { recoverLessonFields } from "@/lib/lesson/notes";
 import {
   appendFixtureExchange,
   fixtureGetOrCreateThread,
@@ -51,7 +52,8 @@ export class FixtureLessonClient implements LessonClient {
       | { summary?: string; key_points?: string[]; transcript?: string }
       | undefined;
     if (generated && (generated.summary || generated.transcript)) {
-      const text = generated.transcript || generated.summary || "";
+      const recovered = recoverLessonFields(generated);
+      const text = recovered.transcript || recovered.summary || "";
       const saved = video?.metadata_json?.gemini_segments as
         | {
             id: string;
@@ -62,7 +64,10 @@ export class FixtureLessonClient implements LessonClient {
             content_hash: string;
           }[]
         | undefined;
-      const snippets = saved?.length
+      const savedBroken = saved?.some(
+        (segment) => segment.text.includes('"key_points"') || segment.text.trim().startsWith("{"),
+      );
+      const snippets = saved?.length && !savedBroken
         ? saved.map((segment) => ({
             id: segment.id,
             ordinal: segment.ordinal,
@@ -97,8 +102,8 @@ export class FixtureLessonClient implements LessonClient {
             summary_kind: "short",
             revision: 1,
             status: "ready",
-            summary: generated.summary || text,
-            key_points: generated.key_points || [],
+            summary: recovered.summary || text,
+            key_points: recovered.keyPoints,
             claims: [],
             examples: [],
             evidence_segment_ids: [],
@@ -107,7 +112,7 @@ export class FixtureLessonClient implements LessonClient {
           },
         ],
         snippets,
-        starter_questions: (generated.key_points || []).slice(0, 3),
+        starter_questions: recovered.keyPoints.slice(0, 3).map((point) => `Explain: ${point}`),
         fixture_data: false,
       };
     }
@@ -187,9 +192,10 @@ export class FixtureLessonClient implements LessonClient {
       const videoId = input.videoId || fixtureThreadScope(input.threadId);
       const video = videoId ? await getLibraryClient().getVideo(videoId).catch(() => null) : null;
       const lesson = video?.metadata_json?.gemini_lesson as
-        | { transcript?: string; summary?: string }
+        | { transcript?: string; summary?: string; key_points?: string[] }
         | undefined;
-      const transcript = lesson?.transcript || lesson?.summary || "";
+      const recovered = recoverLessonFields(lesson);
+      const transcript = recovered.transcript;
       if (videoId && isDurableLesson(video) && transcript) {
         const res = await fetch("/api/lesson-chat", {
           method: "POST",

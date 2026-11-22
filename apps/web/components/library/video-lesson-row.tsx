@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { SourceStatusBadge } from "@/components/patterns/source-status-badge";
+import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { formatDuration } from "@/lib/library/coverage";
 import type { PlaylistItemRecord } from "@/lib/library/types";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,7 @@ type VideoLessonRowProps = {
 
 export function VideoLessonRow({ item, className }: VideoLessonRowProps) {
   const href = item.video_id ? `/videos/${item.video_id}` : undefined;
-  const title = item.title?.trim() || `Video ${item.youtube_video_id}`;
+  const title = displayLessonTitle(item.title, `Video ${item.youtube_video_id}`);
   const content = (
     <>
       <span className="w-8 shrink-0 tabular-nums text-muted-foreground">
@@ -20,9 +21,11 @@ export function VideoLessonRow({ item, className }: VideoLessonRowProps) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium text-foreground">{title}</span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">
-          {item.channel_title ?? "Channel unavailable"} ·{" "}
-          {formatDuration(item.duration_seconds)}
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {lessonSubtitle({
+            channel: item.channel_title,
+            duration: formatDuration(item.duration_seconds),
+          }) || "Lesson"}
         </span>
       </span>
       <SourceStatusBadge status={item.state === "failed" ? "failed_retryable" : item.state} />

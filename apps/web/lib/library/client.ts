@@ -4,6 +4,7 @@
  */
 
 import { isOfficialYoutubeId } from "@/lib/lesson/citations";
+import { toLessonTitle } from "@/lib/lesson/title";
 import { normalizeCoverage } from "@/lib/library/coverage";
 import {
   FIXTURE_PLAYLIST,
@@ -407,7 +408,22 @@ export class FixtureLibraryClient implements LibraryClient {
             lessonBody?.error || "Gemini could not build a lesson from this video.",
           );
         }
-        title = lessonBody?.title || title;
+        title = toLessonTitle(lessonBody?.title || "");
+        if (!title) {
+          try {
+            const metaRes = await fetch(
+              `/api/youtube-oembed?videoId=${encodeURIComponent(videoId)}`,
+            );
+            if (metaRes.ok) {
+              const meta = (await metaRes.json()) as { title?: string; author_name?: string };
+              title = toLessonTitle(meta.title || "");
+              if (meta.author_name) channel = meta.author_name;
+            }
+          } catch {
+            // Title stays as the video id when oEmbed is unreachable.
+          }
+        }
+        title = title || `YouTube ${videoId}`;
         const summary = lessonBody?.summary || "";
         const keyPoints = lessonBody?.key_points || [];
         const transcript = lessonBody?.transcript || "";

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { askGeminiLesson } from "@/lib/lesson/gemini-ask";
 import { VIDEO_DOES_NOT_COVER, type PromptEvidence } from "@/lib/lesson/model-prompt";
 import { proxyLearningApi } from "@/lib/server/learning-api";
+import { buildSearchPlan } from "@/lib/search/search-plan";
 import { searchTopicSources, type TopicSource } from "@/lib/search/topic-sources";
 import type { TutorAnswer } from "@/lib/lesson/answer";
 
@@ -32,6 +33,13 @@ export async function POST(request: Request) {
     );
   }
   const externalSearch = Boolean(payload?.externalSearch);
+  const plan = externalSearch
+    ? await buildSearchPlan({
+        title: payload?.title || "",
+        summary: transcript.slice(0, 6_000),
+        question,
+      })
+    : null;
   const prepare = await proxyLearningApi(
     request,
     `/api/v1/lesson-chat/videos/${videoId}/prepare`,
@@ -42,7 +50,7 @@ export async function POST(request: Request) {
   );
   if (!prepare.ok) return prepare;
   const prepared = (await prepare.json().catch(() => null)) as { packed_history?: string } | null;
-  const found = externalSearch ? await searchTopicSources(question) : [];
+  const found = plan?.accepted ? await searchTopicSources(plan.queries[0] || question) : [];
   const retrieved = await proxyLearningApi(
     request,
     `/api/v1/lesson-chat/videos/${videoId}/retrieve`,
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
     evidence,
     found,
   });
+  if (plan && answer.ok) answer.answer.web_search = plan;
   if (!answer.ok) {
     const busy = answer.error === "Gemini is busy.";
     return NextResponse.json(
@@ -112,6 +121,17 @@ export async function POST(request: Request) {
                 : [],
             )
           : [],
+        ...(plan
+          ? {
+              web_search: {
+                queries: plan.queries,
+                keywords: plan.keywords,
+                score: plan.score,
+                accepted: plan.accepted,
+                note: plan.note.slice(0, 240),
+              },
+            }
+          : {}),
       },
     }),
   });

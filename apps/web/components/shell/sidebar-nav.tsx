@@ -50,9 +50,9 @@ export function SidebarNav({ onNavigate, className }: SidebarNavProps) {
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex min-h-11 items-center gap-3 rounded-[var(--radius-control)] px-3 text-sm font-medium transition-colors duration-150",
+              "relative flex min-h-10 items-center gap-3 rounded-[var(--radius-control)] px-3 text-sm font-medium transition-colors duration-150",
               active
-                ? "bg-primary/10 text-primary"
+                ? "bg-primary/10 text-primary before:absolute before:inset-y-2 before:-left-3 before:w-1 before:rounded-r-full before:bg-primary"
                 : "text-muted-foreground hover:bg-surface-muted hover:text-foreground",
             )}
           >

@@ -24,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { resolveLibraryMode } from "@/lib/library/client";
 import { formatDuration } from "@/lib/library/coverage";
 import { usePlaylistsInfinite, useVideosInfinite } from "@/lib/library/query";
@@ -158,16 +159,24 @@ export function LibraryBrowser({
                           "block rounded-[var(--radius-card)] border border-border bg-surface transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           view === "list" ? "px-4 py-3" : "p-4",
                         )}
-                        aria-label={`Open ${video.title}`}
+                        aria-label={`Open ${displayLessonTitle(video.title)}`}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-foreground">{video.title}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {video.channel_title ?? "Unknown channel"} ·{" "}
-                              {formatDuration(video.duration_seconds)}
-                              {video.fixture_data ? " · Fixture data" : ""}
-                            </p>
+                            <p className="truncate font-medium text-foreground">{displayLessonTitle(video.title)}</p>
+                            {lessonSubtitle({
+                              channel: video.channel_title,
+                              duration: formatDuration(video.duration_seconds),
+                              extra: video.fixture_data ? "Fixture data" : null,
+                            }) ? (
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {lessonSubtitle({
+                                  channel: video.channel_title,
+                                  duration: formatDuration(video.duration_seconds),
+                                  extra: video.fixture_data ? "Fixture data" : null,
+                                })}
+                              </p>
+                            ) : null}
                           </div>
                           <SourceStatusBadge status={video.status} />
                         </div>

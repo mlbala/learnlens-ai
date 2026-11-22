@@ -47,6 +47,13 @@ const messages: ChatMessage[] = [
       lesson: [{ heading: "What it is", body: "Stored lesson card." }],
       external: [],
       sources: [],
+      web_search: {
+        queries: ["agent memory official docs"],
+        keywords: ["working memory", "agent"],
+        score: 82,
+        accepted: true,
+        note: "Searched academic papers and official documents.",
+      },
     },
   },
 ];
@@ -95,7 +102,10 @@ describe("ChatPanel", () => {
     expect(screen.getByRole("heading", { name: "What it is" })).toBeInTheDocument();
     expect(screen.getByText("Stored lesson card.")).toBeInTheDocument();
     expect(screen.getByText("What is an agent?")).toBeInTheDocument();
-    expect(screen.getByText("Search on")).toBeInTheDocument();
+    expect(screen.getAllByText("Web search on").length).toBeGreaterThan(0);
+    expect(screen.getByText("working memory")).toBeInTheDocument();
+    expect(screen.getByText("Score 82")).toBeInTheDocument();
+    expect(screen.getByText("Searched academic papers and official documents.")).toBeInTheDocument();
     expect(screen.queryByText(/###/)).not.toBeInTheDocument();
   });
 
@@ -159,6 +169,7 @@ describe("ChatPanel", () => {
 
     expect(await screen.findByText("Photosynthesis stores energy in leaves.")).toBeInTheDocument();
     expect(screen.getByText("Search is on, and no outside source was kept.")).toBeInTheDocument();
+    expect(screen.getByText("Searched academic papers and official documents.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByText("From papers and official docs")).not.toBeInTheDocument();
   });

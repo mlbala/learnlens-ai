@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { AppTopbar } from "@/components/shell/app-topbar";
+import { PageTitleProvider } from "@/components/shell/page-title";
 
 type AppShellProps = {
   children: ReactNode;
@@ -16,7 +17,8 @@ export function AppShell({ children }: AppShellProps) {
   const provider = runtimeEnv("AI_CHAT_PROVIDER") || "gemini";
   const configured = provider === "gemini" ? Boolean(runtimeEnv("GEMINI_API_KEY")) : true;
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <PageTitleProvider>
+      <div className="flex min-h-screen bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-[var(--radius-control)] focus:bg-surface focus:px-3 focus:py-2 focus:shadow-[var(--shadow-sm)]"
@@ -33,6 +35,7 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </PageTitleProvider>
   );
 }

@@ -9,7 +9,8 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/app/.venv
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_HTTP_TIMEOUT=120
 COPY pyproject.toml uv.lock ./
 COPY app ./app
 COPY alembic.ini ./

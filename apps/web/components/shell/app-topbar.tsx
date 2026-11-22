@@ -5,7 +5,9 @@ import { Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { ProviderBadge } from "@/components/patterns/provider-badge";
+import { BrandMark } from "@/components/shell/brand-mark";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { usePageTitleValue } from "@/components/shell/page-title";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,14 +26,22 @@ export function AppTopbar({
   providerConfigured = true,
 }: AppTopbarProps) {
   const pathname = usePathname();
-  const crumbs = breadcrumbForPath(pathname);
+  const pageTitle = usePageTitleValue();
+  const crumbs = breadcrumbForPath(pathname).map((crumb, index, all) => {
+    const isLast = index === all.length - 1;
+    if (!isLast || !pageTitle || !pathname.startsWith("/videos/")) return crumb;
+    return { ...crumb, label: pageTitle };
+  });
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-surface/80 backdrop-blur-md supports-[backdrop-filter]:bg-surface/70">
       <div className="flex h-14 items-center gap-3 px-4 sm:px-6 lg:px-8">
         <MobileNav />
+        <Link href="/" className="flex shrink-0 items-center gap-2 lg:hidden" aria-label="LearnLens AI home">
+          <BrandMark className="h-6 w-6" />
+        </Link>
 
-        <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1 text-sm md:flex">
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 flex-1 items-center gap-1 text-sm md:flex">
           <ol className="flex min-w-0 items-center gap-1">
             {crumbs.map((crumb, index) => {
               const isLast = index === crumbs.length - 1;
@@ -63,8 +73,8 @@ export function AppTopbar({
           </ol>
         </nav>
 
-        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:max-w-md lg:max-w-sm">
-          <div className="relative hidden w-full sm:block">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="relative hidden w-56 lg:block xl:w-72">
             <Label htmlFor="app-search" className="sr-only">
               Search library titles
             </Label>
@@ -76,7 +86,7 @@ export function AppTopbar({
               id="app-search"
               type="search"
               placeholder="Search titles…"
-              className="pl-9"
+              className="h-9 pl-9"
               disabled
               aria-describedby="app-search-hint"
             />
@@ -91,7 +101,7 @@ export function AppTopbar({
           />
           <ThemeToggle />
           <div
-            className="hidden max-w-[9rem] truncate rounded-[var(--radius-control)] border border-border px-2 py-1.5 text-xs text-muted-foreground md:block"
+            className="hidden h-9 max-w-[9rem] items-center truncate rounded-[var(--radius-control)] border border-border px-2 text-xs leading-9 text-muted-foreground xl:flex"
             title={workspaceLabel}
           >
             {workspaceLabel}

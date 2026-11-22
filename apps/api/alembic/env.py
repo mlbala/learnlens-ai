@@ -23,6 +23,7 @@ from app.db.models import (  # noqa: F401 — register metadata
     Workspace,
     WorkspaceMembership,
 )
+from app.db.session import _asyncpg_ssl_context, _to_async_url
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -34,19 +35,18 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-def _database_url() -> str:
+def _raw_database_url() -> str:
     """Prefer unpooled Neon URL for DDL; never log the value."""
-    url = (
+    return (
         os.environ.get("DATABASE_URL_UNPOOLED", "").strip()
         or os.environ.get("DATABASE_URL", "").strip()
         or config.get_main_option("sqlalchemy.url")
         or ""
     )
-    if url.startswith("postgres://"):
-        url = "postgresql+asyncpg://" + url.removeprefix("postgres://")
-    elif url.startswith("postgresql://"):
-        url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
-    return url
+
+
+def _database_url() -> str:
+    return _to_async_url(_raw_database_url())
 
 
 def run_migrations_offline() -> None:
@@ -70,11 +70,14 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     conf = config.get_section(config.config_ini_section) or {}
-    conf["sqlalchemy.url"] = _database_url()
+    raw_url = _raw_database_url()
+    conf["sqlalchemy.url"] = _to_async_url(raw_url)
+    ssl_ctx = _asyncpg_ssl_context(raw_url)
     connectable = async_engine_from_config(
         conf,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"ssl": ssl_ctx} if ssl_ctx is not None else {},
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
