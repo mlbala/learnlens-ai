@@ -20,6 +20,8 @@ export type TutorAnswer = {
   external: AnswerSection[];
   sources: AnswerSource[];
   review_status?: ReviewStatus;
+  decision?: "lesson_only" | "blend" | "abstain";
+  outside_lane_empty?: boolean;
 };
 
 function asSections(value: unknown): AnswerSection[] {
@@ -65,12 +67,21 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
   const review_status = asReviewStatus(
     (data as { review_status?: unknown }).review_status,
   );
+  const decisionRaw = (data as { decision?: unknown }).decision;
+  const decision =
+    decisionRaw === "lesson_only" || decisionRaw === "blend" || decisionRaw === "abstain"
+      ? decisionRaw
+      : undefined;
+  const outside_lane_empty =
+    (data as { outside_lane_empty?: unknown }).outside_lane_empty === true;
   return {
     v: 1,
     lesson,
     external,
     sources,
     ...(review_status ? { review_status } : {}),
+    ...(decision ? { decision } : {}),
+    ...(outside_lane_empty ? { outside_lane_empty: true } : {}),
   };
 }
 

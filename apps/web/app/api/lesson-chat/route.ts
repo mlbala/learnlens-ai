@@ -70,8 +70,14 @@ export async function POST(request: Request) {
     found,
   });
   if (!answer.ok) {
+    const busy = answer.error === "Gemini is busy.";
     return NextResponse.json(
-      { error: { code: "GEMINI_ASK_FAILED", message: answer.error } },
+      {
+        error: {
+          code: busy ? "GEMINI_BUSY" : "GEMINI_ASK_FAILED",
+          message: busy ? "Gemini is busy." : "Gemini could not answer.",
+        },
+      },
       { status: answer.status },
     );
   }

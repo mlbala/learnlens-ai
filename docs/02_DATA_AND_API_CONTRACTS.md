@@ -157,3 +157,15 @@ When `timing_verified=false`, `start_ms`, `end_ms`, and timestamped URL must be 
 ## 6. Versioning rules
 
 Any change to segmentation strategy increments `processing_version`; any change to embedding model or dimensions creates a new `embedding_profile` and collection; model prompts have `prompt_version`. Existing content may be reprocessed asynchronously with status and rollback strategy. Store source hash and model/provider version in manifests.
+
+## 7. Operator note — history, threads, origins, and the lesson cache
+
+`workspaces.learning_history_limit` defaults to 10 and must stay between 1 and 100. Settings reads and writes that number. Saving a smaller limit trims that workspace immediately. Recent Learning and My Library both list the lessons that remain, newest `last_opened_at` first.
+
+Each saved lesson has one chat thread for its workspace and video (`chat_threads.scope_kind = video`, `scope_id` = the lesson id). The thread, its messages, and its evidence belong to that workspace. Another workspace cannot open the list or the lesson.
+
+Two evidence origins share the lesson's `thread_id`. `video_transcript` / `gemini_youtube` rows are `transcript_segments`. `external_search` rows are `external_evidence` with provider `tavily`, `semantic_scholar`, or `openalex`. Qdrant points are derived and carry `workspace_id`, `video_id`, `thread_id`, `evidence_origin`, `evidence_provider`, and `content_hash`. The live checkbox filters retrieval: off reads `video_transcript` only; on reads both lanes and keeps the video lane first.
+
+Trimming a lesson deletes, for that workspace and video, the lesson, its source asset, its transcript segments, its `external_evidence` rows, its chat thread and messages, and both origins of its Qdrant points.
+
+Redis may cache the lesson body only when `LESSON_BODY_CACHE_ENABLED` is on (off by default, including tests) and `REDIS_URL` answers. The key is `ll:lesson-body:{workspace_id}:{video_id}:{content_hash}` and expires after 10 minutes. The value is summary, key points, and transcript segments. It does not store `external_evidence` snippets or Qdrant hits. A trim, a replaced lesson, or a segment change deletes that key. If Redis is down, the read uses Neon and continues. One answer log line records ids, the decision, review status, whether search was on, kept passage counts, and token counts when the provider returned them. It does not record transcript text, snippets, URL queries, or source titles.

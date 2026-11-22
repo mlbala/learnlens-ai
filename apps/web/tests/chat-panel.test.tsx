@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ChatPanel } from "@/components/lesson/chat-panel";
+import { asTutorAnswer } from "@/lib/lesson/answer";
 import { resetLessonClient, type LessonClient } from "@/lib/lesson/client";
 import type { ChatMessage, ChatThread, LessonBundle, PostChatResult } from "@/lib/lesson/types";
 
@@ -53,6 +54,8 @@ const messages: ChatMessage[] = [
 class StoredClient implements LessonClient {
   readonly mode = "fixture" as const;
 
+  constructor(private readonly rows: ChatMessage[] = messages) {}
+
   async getLessonBundle(): Promise<LessonBundle> {
     return { chapters: [], summaries: [], snippets: [], starter_questions: [], fixture_data: false };
   }
@@ -66,7 +69,7 @@ class StoredClient implements LessonClient {
   }
 
   async listMessages(): Promise<ChatMessage[]> {
-    return messages;
+    return this.rows;
   }
 
   async postMessage(): Promise<PostChatResult> {
@@ -94,5 +97,69 @@ describe("ChatPanel", () => {
     expect(screen.getByText("What is an agent?")).toBeInTheDocument();
     expect(screen.getByText("Search on")).toBeInTheDocument();
     expect(screen.queryByText(/###/)).not.toBeInTheDocument();
+  });
+
+  it("renders the withheld state with a retry", async () => {
+    const withheld = asTutorAnswer({
+      v: 1,
+      lesson: [{ heading: "Not answered", body: "Not answered." }],
+      external: [],
+      sources: [],
+      review_status: "withheld",
+    });
+    const user = messages[0];
+    const assistant = messages[1];
+    if (!user || !assistant || !withheld) throw new Error("fixture");
+    expect(withheld.review_status).toBe("withheld");
+    resetLessonClient(
+      new StoredClient([
+        user,
+        { ...assistant, content: "Not answered.", content_json: withheld },
+      ]),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ChatPanel videoId="video-1" transcriptAccess starterQuestions={[]} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("The reviewer withheld this answer.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByText("Not answered.")).toBeInTheDocument();
+  });
+
+  it("renders an empty outside search beside the video answer", async () => {
+    const answer = asTutorAnswer({
+      v: 1,
+      lesson: [{ heading: "From the video", body: "Photosynthesis stores energy in leaves." }],
+      external: [],
+      sources: [],
+      decision: "lesson_only",
+      outside_lane_empty: true,
+    });
+    const user = messages[0];
+    const assistant = messages[1];
+    if (!user || !assistant || !answer) throw new Error("fixture");
+    expect(answer.outside_lane_empty).toBe(true);
+    resetLessonClient(
+      new StoredClient([
+        { ...user, content: "How do leaves store energy?" },
+        {
+          ...assistant,
+          content: "Photosynthesis stores energy in leaves.",
+          content_json: answer,
+        },
+      ]),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ChatPanel videoId="video-1" transcriptAccess starterQuestions={[]} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Photosynthesis stores energy in leaves.")).toBeInTheDocument();
+    expect(screen.getByText("Search is on, and no outside source was kept.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("From papers and official docs")).not.toBeInTheDocument();
   });
 });

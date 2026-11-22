@@ -30,6 +30,29 @@ type ChatPanelProps = {
   className?: string;
 };
 
+function safeFailure(error: unknown, fallback: string): string {
+  if (error instanceof LessonApiError) {
+    if (error.code === "GEMINI_BUSY" || error.code === "PROVIDER_TEMPORARILY_UNAVAILABLE") {
+      return "Gemini is busy.";
+    }
+    if (error.code === "LESSON_NOT_IN_WORKSPACE") {
+      return "This lesson is not in this workspace.";
+    }
+    if (isPublicSentence(error.message)) return error.message;
+    return fallback;
+  }
+  if (error instanceof Error && isPublicSentence(error.message)) return error.message;
+  return fallback;
+}
+
+function isPublicSentence(message: string): boolean {
+  const text = message.trim();
+  if (!text || text.length > 240) return false;
+  if (/traceback|api[_-]?key|stack trace|exception/i.test(text)) return false;
+  if (text.includes("{") || text.includes("\n")) return false;
+  return true;
+}
+
 const MODES: { value: ExplanationMode; label: string }[] = [
   { value: "simple", label: "Brief" },
   { value: "standard", label: "Detailed" },
@@ -88,11 +111,7 @@ export function ChatPanel({
     return (
       <ErrorState
         title="Chat unavailable"
-        message={
-          threadQuery.error instanceof Error
-            ? threadQuery.error.message
-            : "Could not open a chat thread."
-        }
+        message={safeFailure(threadQuery.error, "Could not open a chat thread.")}
         action={
           <Button type="button" variant="outline" onClick={() => void threadQuery.refetch()}>
             Retry
@@ -122,13 +141,7 @@ export function ChatPanel({
       setQuestion("");
       await messagesQuery.refetch();
     } catch (err) {
-      const message =
-        err instanceof LessonApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Chat request failed";
-      setLastError(message);
+      setLastError(safeFailure(err, "The answer could not be completed."));
     } finally {
       setPendingLocal(false);
     }
@@ -206,12 +219,23 @@ export function ChatPanel({
         {threadQuery.isLoading || (Boolean(threadId) && messagesQuery.isLoading && messages.length === 0) ? (
           <p className="text-sm text-muted-foreground">Loading conversation…</p>
         ) : null}
-        {messages.map((msg) => (
+        {messages.map((msg, index) => (
           <ChatBubble
             key={msg.id}
             message={msg}
             youtubeVideoId={youtubeVideoId}
             onSeek={onSeek}
+            onRetry={
+              msg.role === "assistant"
+                ? () => {
+                    const prior = messages
+                      .slice(0, index)
+                      .reverse()
+                      .find((item) => item.role === "user");
+                    if (prior?.content.trim()) void send(prior.content);
+                  }
+                : undefined
+            }
           />
         ))}
         {busy ? (
@@ -280,12 +304,18 @@ function ChatBubble({
   message,
   youtubeVideoId,
   onSeek,
+  onRetry,
 }: {
   message: ChatMessage;
   youtubeVideoId?: string | null;
   onSeek?: (seconds: number) => void;
+  onRetry?: () => void;
 }) {
   const isUser = message.role === "user";
+  const withheld = message.content_json?.review_status === "withheld";
+  const outsideEmpty =
+    message.content_json?.outside_lane_empty === true &&
+    (message.content_json.lesson?.length ?? 0) > 0;
   return (
     <div
       className={cn(
@@ -319,7 +349,33 @@ function ChatBubble({
       {isUser ? (
         <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{message.content}</p>
       ) : (
-        <AnswerView content={message.content} structured={message.content_json} />
+        <>
+          {withheld ? (
+            <Alert className="mb-2">
+              <AlertDescription className="flex flex-wrap items-center gap-2">
+                <span>The reviewer withheld this answer.</span>
+                {onRetry ? (
+                  <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+                    Retry
+                  </Button>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {outsideEmpty ? (
+            <Alert className="mb-2">
+              <AlertDescription className="flex flex-wrap items-center gap-2">
+                <span>Search is on, and no outside source was kept.</span>
+                {onRetry ? (
+                  <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+                    Retry
+                  </Button>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <AnswerView content={message.content} structured={message.content_json} />
+        </>
       )}
 
       {!isUser && message.analogies.length > 0 ? (

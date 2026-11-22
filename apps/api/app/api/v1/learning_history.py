@@ -20,6 +20,7 @@ from app.api.v1.schemas import (
 )
 from app.core.errors import raise_api_error
 from app.db.models import TranscriptSegment, Video
+from app.services.lesson_cache import lesson_cache_from_settings
 from app.services.lesson_history import (
     SOURCE_KIND_GEMINI_YOUTUBE,
     LessonHistoryError,
@@ -110,9 +111,14 @@ def _fail(exc: LessonHistoryError, request_id: str | None) -> None:
     raise_api_error(exc.status_code, code=exc.code, message=exc.message, request_id=request_id)
 
 
+def _service(db: DbSession, request: Request | None = None) -> LessonHistoryService:
+    settings = getattr(request.app.state, "settings", None) if request is not None else None
+    return LessonHistoryService(db, cache=lesson_cache_from_settings(settings))
+
+
 @router.get("", response_model=LessonListResponse)
 async def list_learning_history(ctx: CurrentAuth, db: DbSession) -> LessonListResponse:
-    service = LessonHistoryService(db)
+    service = _service(db)
     videos = await service.list_lessons(ctx.workspace.id)
     items: list[LessonSummaryOut] = []
     for video in videos:
@@ -133,7 +139,7 @@ async def save_learning_history(
     db: DbSession,
 ) -> LessonDetailOut:
     request_id = getattr(request.state, "request_id", None)
-    service = LessonHistoryService(db)
+    service = _service(db, request)
     try:
         video, segments, created = await service.save_lesson(
             workspace_id=ctx.workspace.id,
@@ -159,7 +165,7 @@ async def get_learning_history_lesson(
     db: DbSession,
 ) -> LessonDetailOut:
     request_id = getattr(request.state, "request_id", None)
-    service = LessonHistoryService(db)
+    service = _service(db, request)
     try:
         video, segments = await service.get_lesson(
             workspace_id=ctx.workspace.id,
@@ -178,7 +184,7 @@ async def open_learning_history_lesson(
     db: DbSession,
 ) -> LessonDetailOut:
     request_id = getattr(request.state, "request_id", None)
-    service = LessonHistoryService(db)
+    service = _service(db, request)
     try:
         video, segments = await service.open_lesson(
             workspace_id=ctx.workspace.id,
@@ -194,7 +200,7 @@ async def get_learning_history_settings(
     ctx: CurrentAuth,
     db: DbSession,
 ) -> LearningHistorySettingsOut:
-    service = LessonHistoryService(db)
+    service = _service(db)
     limit = await service.get_limit(ctx.workspace.id)
     return LearningHistorySettingsOut(learning_history_limit=limit)
 
@@ -207,7 +213,7 @@ async def put_learning_history_settings(
     db: DbSession,
 ) -> LearningHistorySettingsOut:
     request_id = getattr(request.state, "request_id", None)
-    service = LessonHistoryService(db)
+    service = _service(db, request)
     try:
         limit = await service.set_limit(ctx.workspace.id, body.learning_history_limit)
     except LessonHistoryError as exc:
