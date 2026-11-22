@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { recoverLessonFields } from "@/lib/lesson/notes";
+import { toLessonTitle } from "@/lib/lesson/title";
+
 export const maxDuration = 120;
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
@@ -30,7 +33,11 @@ async function gemini(parts: unknown[], model: string, apiKey: string) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts }],
-        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          maxOutputTokens: 4096,
+        },
       }),
       signal: AbortSignal.timeout(25_000),
     });
@@ -66,7 +73,7 @@ export async function POST(request: Request) {
   }
 
   const prompt =
-    "Watch this public YouTube video. Return compact JSON with keys title, summary (one paragraph), key_points (up to 6 short strings), and transcript (the main spoken points in a few paragraphs). Do not invent timestamps. If you cannot access the video, set summary and transcript to empty strings.";
+    "Watch this public YouTube video. Return compact JSON with keys title, summary, key_points, and transcript. Summary is two or three short paragraphs of plain sentences. key_points is up to 6 complete sentences. Transcript is the main spoken points in a few paragraphs. Title is a short plain name with no emoji, hashtags, or decoration. Do not invent timestamps. If you cannot access the video, set summary and transcript to empty strings.";
 
   const parts = [
     {
@@ -99,12 +106,17 @@ export async function POST(request: Request) {
     );
   }
 
-  let lesson: LessonPayload = {};
+  let parsed: LessonPayload = {};
   try {
-    lesson = JSON.parse(result.text) as LessonPayload;
+    parsed = JSON.parse(result.text) as LessonPayload;
   } catch {
-    lesson = { summary: result.text, transcript: result.text, key_points: [] };
+    parsed = { summary: result.text, transcript: result.text, key_points: [] };
   }
+  const lesson = recoverLessonFields({
+    summary: parsed.summary || "",
+    key_points: parsed.key_points,
+    transcript: parsed.transcript,
+  });
   if (!lesson.summary && !lesson.transcript) {
     return NextResponse.json(
       { error: "Gemini could not read this video. It may be private, age-gated, or too long." },
@@ -114,9 +126,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     videoId,
-    title: lesson.title || "",
+    title: toLessonTitle(parsed.title || ""),
     summary: lesson.summary || "",
-    key_points: Array.isArray(lesson.key_points) ? lesson.key_points.map(String).slice(0, 8) : [],
+    key_points: lesson.keyPoints,
     transcript: lesson.transcript || lesson.summary || "",
   });
 }

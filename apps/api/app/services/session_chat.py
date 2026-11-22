@@ -336,6 +336,9 @@ class SessionChatService:
         structured["outside_lane_empty"] = bool(
             external_search and packet.decision == "lesson_only"
         )
+        search_plan = _web_search_plan(answer)
+        if search_plan is not None and external_search:
+            structured["web_search"] = search_plan
         if not structured["lesson"]:
             raise SessionChatError(
                 422,
@@ -823,6 +826,43 @@ def _normalize_draft(
         structured["external"] = []
         structured["sources"] = []
     return structured
+
+
+def _clip_texts(value: Any, *, limit: int, item_limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    rows: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        rows.append(text[:item_limit])
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _web_search_plan(answer: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(answer, dict):
+        return None
+    raw = answer.get("web_search")
+    if not isinstance(raw, dict):
+        return None
+    queries = _clip_texts(raw.get("queries"), limit=4, item_limit=180)
+    keywords = _clip_texts(raw.get("keywords"), limit=8, item_limit=80)
+    if not queries and not keywords:
+        return None
+    try:
+        score = int(raw.get("score", 0))
+    except (TypeError, ValueError):
+        score = 0
+    return {
+        "queries": queries,
+        "keywords": keywords,
+        "score": max(0, min(score, 100)),
+        "accepted": bool(raw.get("accepted")),
+        "note": str(raw.get("note") or "").strip()[:240],
+    }
 
 
 def _structured_answer(payload: dict[str, Any], *, external_search: bool) -> dict[str, Any]:

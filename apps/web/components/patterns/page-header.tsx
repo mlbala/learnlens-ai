@@ -19,16 +19,16 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+        "mb-6 flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
-      <div className="prose-measure min-w-0">
-        <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground sm:text-[2rem]">
+      <div className="min-w-0 flex-1">
+        <h1 className="line-clamp-2 text-balance text-[1.75rem] font-semibold leading-tight tracking-tight text-foreground sm:text-[2rem]">
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 text-sm text-muted-foreground sm:text-[15px]">
+          <p className="mt-1 truncate text-sm text-muted-foreground">
             {description}
           </p>
         ) : null}

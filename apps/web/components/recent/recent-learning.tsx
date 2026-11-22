@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/patterns/error-state";
 import { PageHeader } from "@/components/patterns/page-header";
 import { PageSkeleton } from "@/components/patterns/page-skeleton";
 import { Button } from "@/components/ui/button";
+import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { useVideosInfinite } from "@/lib/library/query";
 import type { VideoRecord } from "@/lib/library/types";
 
@@ -35,12 +36,14 @@ export function RecentLearningList({ lessons, emptyAction }: RecentLearningListP
           <Link
             href={`/videos/${lesson.id}`}
             className="block rounded-[var(--radius-card)] border border-border bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Open ${lesson.title}`}
+            aria-label={`Open ${displayLessonTitle(lesson.title)}`}
           >
-            <p className="truncate font-medium text-foreground">{lesson.title}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {lesson.channel_title ?? "Channel unavailable"}
-            </p>
+            <p className="truncate font-medium text-foreground">{displayLessonTitle(lesson.title)}</p>
+            {lessonSubtitle({ channel: lesson.channel_title }) ? (
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {lessonSubtitle({ channel: lesson.channel_title })}
+              </p>
+            ) : null}
           </Link>
         </li>
       ))}

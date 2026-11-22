@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -16,18 +18,40 @@ from app.core.settings import Settings
 
 
 def _to_async_url(url: str) -> str:
-    """Normalize DATABASE_URL to an async SQLAlchemy URL."""
-    if url.startswith("postgresql+asyncpg://"):
-        return url
+    """Normalize DATABASE_URL to an async SQLAlchemy URL.
+
+    Neon libpq URLs include sslmode and channel_binding. asyncpg.connect does not
+    accept those names, so they are removed here and SSL is passed via connect_args.
+    """
     if url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + url.removeprefix("postgres://")
-    if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url.removeprefix("postgresql://")
-    if url.startswith("sqlite+aiosqlite://"):
+        url = "postgresql+asyncpg://" + url.removeprefix("postgres://")
+    elif url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url.removeprefix("postgresql://")
+    elif url.startswith("sqlite://") and not url.startswith("sqlite+"):
+        url = "sqlite+aiosqlite://" + url.removeprefix("sqlite://")
+    if not url.startswith("postgresql"):
         return url
-    if url.startswith("sqlite://"):
-        return "sqlite+aiosqlite://" + url.removeprefix("sqlite://")
-    return url
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.pop("channel_binding", None)
+    query.pop("sslmode", None)
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _asyncpg_ssl_context(url: str) -> ssl.SSLContext | None:
+    """SSL context for Neon. Matches the readiness probe (encrypt, do not pin hostname)."""
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    sslmode = (query.get("sslmode") or "").lower()
+    host = (parsed.hostname or "").lower()
+    needs_ssl = sslmode in {"require", "verify-ca", "verify-full"} or host.endswith("neon.tech")
+    if not needs_ssl:
+        return None
+    ctx = ssl.create_default_context()
+    if sslmode in {"", "require", "prefer"} or host.endswith("neon.tech"):
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def create_engine(settings: Settings, *, url: str | None = None) -> AsyncEngine:
@@ -45,9 +69,12 @@ def create_engine(settings: Settings, *, url: str | None = None) -> AsyncEngine:
         kwargs["connect_args"] = {"check_same_thread": False}
         kwargs["poolclass"] = StaticPool
     else:
-        # Neon pooled connections: keep pool small; SSL handled by asyncpg DSN.
+        # Neon pooled connections: keep the pool small. SSL is a connect arg, not a URL param.
         kwargs["pool_size"] = 5
         kwargs["max_overflow"] = 5
+        ssl_ctx = _asyncpg_ssl_context(database_url)
+        if ssl_ctx is not None:
+            kwargs["connect_args"] = {"ssl": ssl_ctx}
     return create_async_engine(async_url, **kwargs)
 
 

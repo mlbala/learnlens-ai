@@ -738,12 +738,23 @@ class LessonChatSourceIn(BaseModel):
     provider: str = Field(pattern="^(tavily|semantic_scholar|openalex)$")
 
 
+class WebSearchPlanIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    queries: list[str] = Field(default_factory=list, max_length=4)
+    keywords: list[str] = Field(default_factory=list, max_length=8)
+    score: int = Field(default=0, ge=0, le=100)
+    accepted: bool = False
+    note: str = Field(default="", max_length=240)
+
+
 class LessonChatAnswerIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     lesson: list[LessonChatSectionIn] = Field(default_factory=list, max_length=8)
     external: list[LessonChatSectionIn] = Field(default_factory=list, max_length=8)
     sources: list[LessonChatSourceIn] = Field(default_factory=list, max_length=8)
+    web_search: WebSearchPlanIn | None = None
 
 
 class PostLessonChatRequest(BaseModel):

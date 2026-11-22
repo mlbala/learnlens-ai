@@ -14,6 +14,14 @@ export type AnswerSource = {
 
 export type ReviewStatus = "accepted" | "regenerated" | "withheld";
 
+export type WebSearchPlan = {
+  queries: string[];
+  keywords: string[];
+  score: number;
+  accepted: boolean;
+  note: string;
+};
+
 export type TutorAnswer = {
   v: 1;
   lesson: AnswerSection[];
@@ -22,6 +30,7 @@ export type TutorAnswer = {
   review_status?: ReviewStatus;
   decision?: "lesson_only" | "blend" | "abstain";
   outside_lane_empty?: boolean;
+  web_search?: WebSearchPlan;
 };
 
 function asSections(value: unknown): AnswerSection[] {
@@ -74,6 +83,7 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
       : undefined;
   const outside_lane_empty =
     (data as { outside_lane_empty?: unknown }).outside_lane_empty === true;
+  const web_search = asWebSearch((data as { web_search?: unknown }).web_search);
   return {
     v: 1,
     lesson,
@@ -82,6 +92,31 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
     ...(review_status ? { review_status } : {}),
     ...(decision ? { decision } : {}),
     ...(outside_lane_empty ? { outside_lane_empty: true } : {}),
+    ...(web_search ? { web_search } : {}),
+  };
+}
+
+function stringList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function asWebSearch(value: unknown): WebSearchPlan | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Partial<WebSearchPlan>;
+  const queries = stringList(row.queries, 4);
+  const keywords = stringList(row.keywords, 8);
+  if (queries.length === 0 && keywords.length === 0) return undefined;
+  const score = Number(row.score);
+  return {
+    queries,
+    keywords,
+    score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 0,
+    accepted: row.accepted === true,
+    note: String(row.note || "").trim().slice(0, 240),
   };
 }
 

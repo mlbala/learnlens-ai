@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/patterns/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { noteParagraphs, recoverLessonFields } from "@/lib/lesson/notes";
 import type { LessonSummary } from "@/lib/lesson/types";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export function SummaryPanel({ summaries, onAskAbout, className }: SummaryPanelP
   return (
     <div className={cn("space-y-3", className)}>
       <Tabs defaultValue={defaultTab}>
-        <TabsList aria-label="Notes detail">
+        <TabsList aria-label="Notes detail" className="justify-start">
           <TabsTrigger value="concise" disabled={!short}>
             Concise
           </TabsTrigger>
@@ -96,9 +97,12 @@ function NotesBody({
   onAskAbout?: (prompt: string) => void;
   copied: boolean;
 }) {
+  const notes = recoverLessonFields({ summary: summary.summary, key_points: summary.key_points });
+  const paragraphs = noteParagraphs(notes.summary);
+  const points = notes.keyPoints;
   return (
     <article className="space-y-4 rounded-[var(--radius-card)] border border-border bg-surface p-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <Button type="button" size="sm" variant="outline" onClick={onCopy}>
           {copied ? "Copied" : "Copy notes"}
         </Button>
@@ -106,19 +110,29 @@ function NotesBody({
           type="button"
           size="sm"
           variant="secondary"
-          onClick={() => onAskAbout?.(`Explain: ${summary.key_points[0] ?? summary.summary.slice(0, 80)}`)}
+          onClick={() => onAskAbout?.(`Explain: ${points[0] ?? notes.summary.slice(0, 80)}`)}
           disabled={!onAskAbout}
         >
           Ask about this
         </Button>
       </div>
-      <p className="prose-measure text-sm leading-relaxed text-foreground">{summary.summary}</p>
-      {summary.key_points.length > 0 ? (
-        <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
-          {summary.key_points.map((point) => (
-            <li key={point}>{point}</li>
-          ))}
-        </ul>
+      <section className="space-y-2" aria-label="Overview">
+        <h3 className="text-sm font-semibold text-foreground">Overview</h3>
+        {paragraphs.map((paragraph) => (
+          <p key={paragraph} className="text-sm leading-6 text-foreground">
+            {paragraph}
+          </p>
+        ))}
+      </section>
+      {points.length > 0 ? (
+        <section className="space-y-2" aria-label="Key points">
+          <h3 className="text-sm font-semibold text-foreground">Key points</h3>
+          <ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-foreground">
+            {points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       {summary.claims.length > 0 ? (
         <section aria-label="Source-backed claims" className="space-y-2">
@@ -158,6 +172,7 @@ function NotesBody({
 }
 
 function formatNotes(summary: LessonSummary): string {
-  const lines = [summary.summary, "", ...summary.key_points.map((p) => `• ${p}`)];
+  const notes = recoverLessonFields({ summary: summary.summary, key_points: summary.key_points });
+  const lines = ["Overview", ...noteParagraphs(notes.summary), "", "Key points", ...notes.keyPoints.map((point) => `• ${point}`)];
   return lines.join("\n");
 }

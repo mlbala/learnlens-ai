@@ -19,6 +19,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { usePageTitle } from "@/components/shell/page-title";
+import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { resolveLibraryMode } from "@/lib/library/client";
 import { LibraryApiError } from "@/lib/library/types";
 import { formatDuration } from "@/lib/library/coverage";
@@ -31,6 +33,8 @@ type VideoDetailProps = {
 export function VideoDetail({ videoId }: VideoDetailProps) {
   const mode = resolveLibraryMode();
   const query = useVideo(videoId);
+  const title = query.data ? displayLessonTitle(query.data.title) : null;
+  usePageTitle(title);
 
   if (query.isLoading) return <PageSkeleton />;
 
@@ -55,7 +59,13 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   }
 
   const video = query.data;
-  if (!video) return null;
+  if (!video || !title) return null;
+
+  const subtitle = lessonSubtitle({
+    channel: video.channel_title,
+    duration: formatDuration(video.duration_seconds),
+    extra: video.fixture_data ? "Fixture data" : null,
+  });
 
   const needsTranscript =
     video.status === "needs_transcript" || video.status === "metadata_only";
@@ -64,15 +74,15 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   return (
     <>
       <PageHeader
-        title={video.title}
-        description={`${video.channel_title ?? "Unknown channel"} · ${formatDuration(video.duration_seconds)}${video.fixture_data ? " · Fixture data" : ""}`}
+        title={title}
+        description={subtitle || undefined}
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <SourceStatusBadge status={video.status} />
             {video.transcript_access ? null : (
               <TranscriptImportDialog
                 videoId={video.id}
-                videoTitle={video.title}
+                videoTitle={title}
                 disabled={unavailable}
                 disabledReason="Unavailable videos cannot accept transcripts."
               />
@@ -106,13 +116,13 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
       ) : null}
 
       {video.transcript_access ? (
-        <LessonReader video={video} />
+        <LessonReader video={{ ...video, title }} />
       ) : (
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
             <YoutubePlayer
               youtubeVideoId={video.youtube_video_id}
-              title={video.title}
+              title={title}
               fixturePlaceholder={Boolean(video.fixture_data)}
             />
             <EmptyState
@@ -121,7 +131,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
               action={
                 <TranscriptImportDialog
                   videoId={video.id}
-                  videoTitle={video.title}
+                  videoTitle={title}
                   disabled={unavailable}
                   disabledReason="Unavailable videos cannot accept transcripts."
                 />
