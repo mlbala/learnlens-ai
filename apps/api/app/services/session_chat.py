@@ -23,6 +23,20 @@ from app.db.models.chat import ChatMessage, ChatThread
 from app.db.repositories.chat import ChatMessageRepository, ChatThreadRepository
 from app.retrieval.session_lanes import ABSTAIN_BODY, ABSTAIN_HEADING, SessionReranker
 from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
+from app.services.session_review import (
+    ModelSessionReviewer,
+    ReviewRequest,
+    ReviewUnavailable,
+    ReviewVerdict,
+    SessionReviewer,
+    build_review_request,
+    deterministic_reasons,
+    is_retired_chat_model,
+    is_review_timeout,
+    merge_verdict,
+    rejection_note,
+    withheld_answer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,11 +181,13 @@ class SessionChatService:
         settings: Settings,
         text_model: TextModel | None = None,
         reranker: SessionReranker | None = None,
+        reviewer: SessionReviewer | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._text_model = text_model
         self._reranker = reranker
+        self._reviewer = reviewer
         self._threads = ChatThreadRepository(session)
         self._messages = ChatMessageRepository(session)
 
@@ -274,17 +290,32 @@ class SessionChatService:
             question=cleaned,
             external_search=external_search,
         )
-        if answer is None:
-            structured = await self._answer_from_packet(
+        timings = await self._video_timings(packet.passages)
+        try:
+            if answer is None:
+                draft = await self._draft_from_model(
+                    packet,
+                    packed_history=packed,
+                    question=cleaned,
+                    external_search=external_search,
+                )
+            else:
+                draft = _structured_answer(answer, external_search=True)
+            structured, review_status = await self._reviewed(
                 packet,
                 packed_history=packed,
                 question=cleaned,
                 external_search=external_search,
+                draft=draft,
+                timings=timings,
+                fill_sources=answer is None,
             )
-        else:
-            structured = _structured_answer(answer, external_search=external_search)
+        except ReviewUnavailable:
+            structured = withheld_answer()
+            review_status = "withheld"
         structured["decision"] = packet.decision
         structured["kept"] = list(packet.kept)
+        structured["review_status"] = review_status
         if not structured["lesson"]:
             raise SessionChatError(
                 422,
@@ -329,6 +360,7 @@ class SessionChatService:
                 "video_id": str(video_id),
                 "thread_id": str(thread.id),
                 "external_search_enabled": external_search,
+                "review_status": review_status,
                 "prior_turns": min(len(turns_from_messages(prior)), HISTORY_TURN_LIMIT),
             },
         )
@@ -404,7 +436,7 @@ class SessionChatService:
     def _evidence_service(self) -> SessionEvidenceService:
         return SessionEvidenceService(self._session, self._settings, reranker=self._reranker)
 
-    async def _answer_from_packet(
+    async def _draft_from_model(
         self,
         packet: EvidencePacket,
         *,
@@ -426,18 +458,121 @@ class SessionChatService:
             evidence_block=packet.prompt_block,
         )
         payload = await self._complete(prompt)
-        structured = _structured_answer(payload, external_search=packet.decision == "blend")
+        structured = _structured_answer(payload, external_search=True)
         if not packet.video_covered:
             structured["lesson"] = [{"heading": ABSTAIN_HEADING, "body": ABSTAIN_BODY}]
-        if packet.decision == "blend":
-            structured["sources"] = list(packet.sources)
-        else:
-            structured["external"] = []
-            structured["sources"] = []
         return structured
 
-    async def _complete(self, prompt: str) -> dict[str, Any]:
+    async def _reviewed(
+        self,
+        packet: EvidencePacket,
+        *,
+        packed_history: str,
+        question: str,
+        external_search: bool,
+        draft: dict[str, Any],
+        timings: dict[str, tuple[int | None, int | None]],
+        fill_sources: bool,
+    ) -> tuple[dict[str, Any], str]:
+        request = build_review_request(
+            question=question,
+            decision=packet.decision,
+            external_search=external_search,
+            draft=draft,
+            passages=list(packet.passages),
+            timings=timings,
+        )
+        try:
+            verdict = await self._judge(request)
+        except ReviewUnavailable:
+            return withheld_answer(), "withheld"
+        if verdict.accept:
+            return _normalize_draft(draft, packet, fill_sources=fill_sources), "accepted"
+        try:
+            rewritten = await self._regenerate(
+                packet,
+                packed_history=packed_history,
+                question=question,
+                external_search=external_search,
+                reasons=verdict.reasons,
+            )
+            if packet.decision == "blend" and not rewritten.get("sources"):
+                rewritten["sources"] = list(packet.sources)
+            second_request = build_review_request(
+                question=question,
+                decision=packet.decision,
+                external_search=external_search,
+                draft=rewritten,
+                passages=list(packet.passages),
+                timings=timings,
+            )
+            second = await self._judge(second_request)
+        except ReviewUnavailable:
+            return withheld_answer(), "withheld"
+        if second.accept:
+            return _normalize_draft(rewritten, packet, fill_sources=True), "regenerated"
+        return withheld_answer(), "withheld"
+
+    async def _judge(self, request: ReviewRequest) -> ReviewVerdict:
+        try:
+            model_verdict = await self._active_reviewer().review(request)
+        except ReviewUnavailable:
+            raise
+        except Exception as exc:
+            if is_review_timeout(exc):
+                raise ReviewUnavailable("Reviewer timed out.") from exc
+            raise
+        return merge_verdict(model_verdict, deterministic_reasons(request))
+
+    def _active_reviewer(self) -> SessionReviewer:
+        if self._reviewer is not None:
+            return self._reviewer
+        return ModelSessionReviewer(self._chat_model())
+
+    def _chat_model(self) -> TextModel:
         model = self._text_model or build_text_model(self._settings)
+        if is_retired_chat_model(str(getattr(model, "model", ""))):
+            raise ReviewUnavailable("Retired chat model is skipped.")
+        return model
+
+    async def _regenerate(
+        self,
+        packet: EvidencePacket,
+        *,
+        packed_history: str,
+        question: str,
+        external_search: bool,
+        reasons: tuple[str, ...],
+    ) -> dict[str, Any]:
+        prompt = model_user_input(
+            packed_history=packed_history,
+            question=question,
+            external_search=external_search,
+            evidence_block=packet.prompt_block,
+        )
+        prompt = f"{prompt}\n\n{rejection_note(reasons)}"
+        payload = await self._complete(prompt)
+        structured = _structured_answer(payload, external_search=True)
+        if not packet.video_covered:
+            structured["lesson"] = [{"heading": ABSTAIN_HEADING, "body": ABSTAIN_BODY}]
+        return structured
+
+    async def _video_timings(
+        self,
+        passages: tuple[Any, ...],
+    ) -> dict[str, tuple[int | None, int | None]]:
+        from app.retrieval.session_lanes import ORIGIN_VIDEO
+
+        ids = [passage.id for passage in passages if passage.evidence_origin == ORIGIN_VIDEO]
+        if not ids:
+            return {}
+        result = await self._session.execute(
+            select(TranscriptSegment).where(TranscriptSegment.id.in_(ids))
+        )
+        return {str(row.id): (row.start_ms, row.end_ms) for row in result.scalars().all()}
+
+    async def _complete(self, prompt: str) -> dict[str, Any]:
+        model = self._chat_model()
         result = await model.generate_structured(
             ModelRequest(
                 purpose="lesson_followup",
@@ -573,6 +708,22 @@ def _section_text(sections: tuple[FollowupSection, ...]) -> str:
 
 def _source_text(sources: tuple[FollowupSource, ...]) -> str:
     return "\n".join(f"{source.provider} | {source.title} | {source.url}" for source in sources)
+
+
+def _normalize_draft(
+    draft: dict[str, Any],
+    packet: EvidencePacket,
+    *,
+    fill_sources: bool,
+) -> dict[str, Any]:
+    blend = packet.decision == "blend"
+    structured = _structured_answer(draft, external_search=blend)
+    if fill_sources and blend and not structured["sources"]:
+        structured["sources"] = list(packet.sources)
+    if not blend:
+        structured["external"] = []
+        structured["sources"] = []
+    return structured
 
 
 def _structured_answer(payload: dict[str, Any], *, external_search: bool) -> dict[str, Any]:

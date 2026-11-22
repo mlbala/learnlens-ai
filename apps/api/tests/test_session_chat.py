@@ -63,6 +63,36 @@ def _answer(mark: int, *, provider: str = "semantic_scholar") -> dict:
     }
 
 
+class _KeepReranker:
+    def __init__(self, url: str = "") -> None:
+        self.url = url
+
+    async def rerank(self, *, question: str, passages: list) -> list[tuple[uuid.UUID, float]]:
+        del question
+        scored: list[tuple[uuid.UUID, float]] = []
+        for passage in passages:
+            if passage.evidence_origin == "external_search" and self.url:
+                score = 0.95 if passage.source_url == self.url else 0.0
+            else:
+                score = 0.95
+            scored.append((passage.id, score))
+        return scored
+
+
+def _retrieve(
+    client: TestClient,
+    video_id: str,
+    question: str,
+    sources: list[dict[str, str]],
+) -> None:
+    response = client.post(
+        f"/api/v1/lesson-chat/videos/{video_id}/retrieve",
+        headers=auth_csrf_headers(client),
+        json={"question": question, "external_search": True, "sources": sources},
+    )
+    assert response.status_code == 200, response.text
+
+
 def _post(
     client: TestClient,
     video_id: str,
@@ -166,6 +196,7 @@ def test_first_message_creates_one_thread_and_stamps_segments(client: TestClient
     _register(client, "chat-memory@example.com")
     saved = _save(client, 1)
     video_id = saved["video"]["id"]
+    client.app.state.session_reranker = _KeepReranker()
     segment_ids = [row["id"] for row in saved["segments"]]
     assert _segment_count(client, video_id) == 2
     before = _segment_rows(client, video_id)
@@ -177,6 +208,20 @@ def test_first_message_creates_one_thread_and_stamps_segments(client: TestClient
     assert empty.json()["messages"] == []
     assert empty.json()["segment_ids"] == segment_ids
 
+    _retrieve(
+        client,
+        video_id,
+        "What is the lesson about?",
+        [
+            {
+                "title": "Paper 1",
+                "url": "https://doi.org/10.1000/paper-1",
+                "snippet": "Outside note PAPER_MARK_1 for the lesson.",
+                "kind": "paper",
+                "provider": "semantic_scholar",
+            }
+        ],
+    )
     first = _post(
         client,
         video_id,
@@ -236,7 +281,25 @@ def test_prepare_packs_last_eight_for_the_live_checkbox(client: TestClient) -> N
     _register(client, "chat-pack@example.com")
     saved = _save(client, 2)
     video_id = saved["video"]["id"]
+    reranker = _KeepReranker()
+    client.app.state.session_reranker = reranker
     for mark in range(1, 10):
+        provider = "tavily" if mark == 9 else "openalex"
+        reranker.url = f"https://doi.org/10.1000/paper-{mark}"
+        _retrieve(
+            client,
+            video_id,
+            f"Question {mark}",
+            [
+                {
+                    "title": f"Paper {mark}",
+                    "url": f"https://doi.org/10.1000/paper-{mark}",
+                    "snippet": f"Outside note PAPER_MARK_{mark}.",
+                    "kind": "paper",
+                    "provider": provider,
+                }
+            ],
+        )
         _post(
             client,
             video_id,
@@ -286,6 +349,21 @@ def test_fake_model_followup_omits_external_panel_when_checkbox_is_off(client: T
     owner = _register(client, "chat-model@example.com")
     saved = _save(client, 3)
     video_id = saved["video"]["id"]
+    client.app.state.session_reranker = _KeepReranker()
+    _retrieve(
+        client,
+        video_id,
+        "What did the lesson say?",
+        [
+            {
+                "title": "Paper 4",
+                "url": "https://doi.org/10.1000/paper-4",
+                "snippet": "Outside note PAPER_MARK_4.",
+                "kind": "paper",
+                "provider": "semantic_scholar",
+            }
+        ],
+    )
     stored = _post(
         client,
         video_id,
@@ -310,11 +388,15 @@ def test_fake_model_followup_omits_external_panel_when_checkbox_is_off(client: T
 
         async def generate_structured(self, request: ModelRequest) -> ModelResult:
             self.prompts.append(request.user_input)
-            return ModelResult(
-                parsed={
+            if request.purpose == "session_review":
+                parsed: dict = {"accept": True, "reasons": []}
+            else:
+                parsed = {
                     "lesson": [{"heading": "Answer", "body": "Follow the lesson panel."}],
-                    "external": [{"heading": "What it is", "body": "Unwanted paper recap."}],
-                },
+                    "external": [],
+                }
+            return ModelResult(
+                parsed=parsed,
                 usage=ModelUsage(
                     input_tokens=1,
                     output_tokens=1,

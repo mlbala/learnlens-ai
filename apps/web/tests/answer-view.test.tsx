@@ -16,6 +16,8 @@ describe("AnswerView", () => {
           kind: "paper",
         },
       ],
+      review_status: "accepted",
+      reasons: ["origin_mix", "invented_timestamp"],
     });
     render(<AnswerView content={content} />);
     expect(screen.getByText("From the lesson")).toBeInTheDocument();
@@ -26,5 +28,7 @@ describe("AnswerView", () => {
     );
     expect(screen.getByText("doi.org")).toBeInTheDocument();
     expect(screen.queryByText(/###/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/origin_mix/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/invented_timestamp/)).not.toBeInTheDocument();
   });
 });

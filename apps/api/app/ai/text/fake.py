@@ -110,6 +110,9 @@ class FakeTextAdapter:
         if purpose == "tutor_quiz":
             return _tutor_quiz_fixture(evidence_ids, request)
 
+        if purpose == "session_review":
+            return {"accept": True, "reasons": []}
+
         if purpose == "lesson_followup":
             external: list[dict[str, str]] = []
             if "external_search: on" in request.user_input:

@@ -12,11 +12,14 @@ export type AnswerSource = {
   provider?: SourceProvider;
 };
 
+export type ReviewStatus = "accepted" | "regenerated" | "withheld";
+
 export type TutorAnswer = {
   v: 1;
   lesson: AnswerSection[];
   external: AnswerSection[];
   sources: AnswerSource[];
+  review_status?: ReviewStatus;
 };
 
 function asSections(value: unknown): AnswerSection[] {
@@ -59,7 +62,21 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
         })
         .filter((source) => source.title && source.url.startsWith("http"))
     : [];
-  return { v: 1, lesson, external, sources };
+  const review_status = asReviewStatus(
+    (data as { review_status?: unknown }).review_status,
+  );
+  return {
+    v: 1,
+    lesson,
+    external,
+    sources,
+    ...(review_status ? { review_status } : {}),
+  };
+}
+
+function asReviewStatus(value: unknown): ReviewStatus | undefined {
+  if (value === "accepted" || value === "regenerated" || value === "withheld") return value;
+  return undefined;
 }
 
 export function parseTutorAnswer(content: string): TutorAnswer | null {
