@@ -13,7 +13,7 @@ import type { TranscriptUploadInput } from "@/lib/library/types";
 export const libraryKeys = {
   all: ["library"] as const,
   dashboard: () => [...libraryKeys.all, "dashboard"] as const,
-  videos: (filters: { status?: string; q?: string }) =>
+  videos: (filters: { status?: string; q?: string; limit?: number }) =>
     [...libraryKeys.all, "videos", filters] as const,
   video: (id: string) => [...libraryKeys.all, "video", id] as const,
   playlists: (filters: { q?: string }) =>
@@ -31,7 +31,7 @@ export function useDashboardStats() {
   });
 }
 
-export function useVideosInfinite(filters: { status?: string; q?: string }) {
+export function useVideosInfinite(filters: { status?: string; q?: string; limit?: number }) {
   const client = getLibraryClient();
   return useInfiniteQuery({
     queryKey: libraryKeys.videos(filters),
@@ -39,7 +39,7 @@ export function useVideosInfinite(filters: { status?: string; q?: string }) {
     queryFn: ({ pageParam }) =>
       client.listVideos({
         cursor: pageParam,
-        limit: 12,
+        limit: filters.limit ?? 12,
         status: filters.status,
         q: filters.q,
       }),
@@ -49,9 +49,14 @@ export function useVideosInfinite(filters: { status?: string; q?: string }) {
 
 export function useVideo(videoId: string) {
   const client = getLibraryClient();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: libraryKeys.video(videoId),
-    queryFn: () => client.getVideo(videoId),
+    queryFn: async () => {
+      const video = await client.getVideo(videoId);
+      await qc.invalidateQueries({ queryKey: [...libraryKeys.all, "videos"] });
+      return video;
+    },
     enabled: Boolean(videoId),
   });
 }

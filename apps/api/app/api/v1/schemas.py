@@ -655,3 +655,68 @@ class TutorPreferencesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     presentation_language: str = Field(pattern="^(en|ta)$")
+
+
+class SaveLessonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    youtube_video_id: str = Field(min_length=11, max_length=11)
+    title: str = Field(default="", max_length=500)
+    channel_title: str | None = Field(default=None, max_length=300)
+    summary: str = Field(default="", max_length=20_000)
+    key_points: list[str] = Field(default_factory=list, max_length=8)
+    transcript: str = Field(min_length=1, max_length=200_000)
+    source_url: str = Field(min_length=8, max_length=2048)
+
+
+class LessonSegmentOut(BaseModel):
+    id: uuid.UUID
+    ordinal: int
+    text: str
+    content_hash: str
+    start_ms: int | None = None
+    end_ms: int | None = None
+    evidence_origin: str
+    evidence_provider: str
+    source_kind: str
+
+
+class LessonSummaryOut(BaseModel):
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    youtube_video_id: str
+    title: str
+    status: str
+    channel_title: str | None = None
+    duration_seconds: int | None = None
+    source_url: str | None = None
+    last_opened_at: datetime | None = None
+    summary: str
+    key_points: list[str]
+    transcript_access: bool = True
+    segment_ids: list[uuid.UUID]
+
+
+class LessonListResponse(BaseModel):
+    items: list[LessonSummaryOut]
+    learning_history_limit: int
+
+
+class LessonDetailOut(BaseModel):
+    video: VideoOut
+    last_opened_at: datetime | None = None
+    summary: str
+    key_points: list[str]
+    source_kind: str
+    created: bool = False
+    segments: list[LessonSegmentOut]
+
+
+class LearningHistorySettingsOut(BaseModel):
+    learning_history_limit: int
+
+
+class LearningHistorySettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    learning_history_limit: int = Field(ge=1, le=100)

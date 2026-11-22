@@ -1,7 +1,7 @@
-import { ComingSoon } from "@/components/patterns/coming-soon";
+import { RecentLearning } from "@/components/recent/recent-learning";
 
 export const metadata = { title: "Recent Learning" };
 
 export default function RecentPage() {
-  return <ComingSoon title="Recent Learning" />;
+  return <RecentLearning />;
 }

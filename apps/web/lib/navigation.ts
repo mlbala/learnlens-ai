@@ -17,7 +17,7 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { id: "playlists", label: "Playlists", href: "/playlists" },
   { id: "videos", label: "Videos", href: "/videos" },
   { id: "practice", label: "Practice", href: "/practice" },
-  { id: "recent", label: "Recent Learning", href: "/recent", placeholder: true },
+  { id: "recent", label: "Recent Learning", href: "/recent" },
   { id: "settings", label: "Settings", href: "/settings" },
 ] as const;
 

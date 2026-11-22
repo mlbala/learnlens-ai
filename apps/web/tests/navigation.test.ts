@@ -22,7 +22,7 @@ describe("PRIMARY_NAV", () => {
 
   it("marks only later-phase screens as placeholders", () => {
     const placeholders = PRIMARY_NAV.filter((item) => item.placeholder);
-    expect(placeholders.map((p) => p.id)).toEqual(["recent"]);
+    expect(placeholders.map((p) => p.id)).toEqual([]);
   });
 });
 

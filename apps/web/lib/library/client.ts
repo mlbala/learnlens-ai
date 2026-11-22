@@ -3,6 +3,7 @@
  * No paid providers; never claims transcript_from_url.
  */
 
+import { isOfficialYoutubeId } from "@/lib/lesson/citations";
 import { normalizeCoverage } from "@/lib/library/coverage";
 import {
   FIXTURE_PLAYLIST,
@@ -73,6 +74,92 @@ function matchesQuery(title: string, q?: string | null): boolean {
   return title.toLowerCase().includes(q.trim().toLowerCase());
 }
 
+type SavedLessonSegment = {
+  id: string;
+  ordinal: number;
+  text: string;
+  content_hash: string;
+  start_ms: number | null;
+  end_ms: number | null;
+};
+
+type SavedLessonSummary = {
+  id: string;
+  workspace_id: string;
+  youtube_video_id: string;
+  title: string;
+  status: string;
+  channel_title?: string | null;
+  duration_seconds?: number | null;
+  source_url?: string | null;
+  summary?: string;
+  key_points?: string[];
+};
+
+type SavedLessonDetail = {
+  video: VideoRecord;
+  summary: string;
+  key_points: string[];
+  segments: SavedLessonSegment[];
+  created?: boolean;
+};
+
+function summaryToVideo(item: SavedLessonSummary): VideoRecord {
+  return {
+    id: item.id,
+    workspace_id: item.workspace_id,
+    youtube_video_id: item.youtube_video_id,
+    title: item.title,
+    status: item.status,
+    channel_title: item.channel_title ?? null,
+    duration_seconds: item.duration_seconds ?? null,
+    source_url: item.source_url ?? null,
+    transcript_access: true,
+    coverage: "ready",
+    fixture_data: false,
+    metadata_json: {
+      fixture_data: false,
+      gemini_lesson: {
+        summary: item.summary ?? "",
+        key_points: item.key_points ?? [],
+        transcript: "",
+      },
+    },
+  };
+}
+
+function detailToVideo(body: SavedLessonDetail): VideoRecord {
+  const transcript = body.segments.map((segment) => segment.text).join("\n\n");
+  return {
+    ...body.video,
+    transcript_access: true,
+    coverage: body.video.coverage ?? "ready",
+    fixture_data: false,
+    metadata_json: {
+      ...(body.video.metadata_json ?? {}),
+      fixture_data: false,
+      gemini_lesson: {
+        summary: body.summary,
+        key_points: body.key_points,
+        transcript,
+      },
+      gemini_segments: body.segments,
+    },
+  };
+}
+
+async function readLibraryError(res: Response, fallback: string): Promise<LibraryApiError> {
+  const body = (await res.json().catch(() => null)) as {
+    error?: { code?: string; message?: string; request_id?: string };
+  } | null;
+  return new LibraryApiError(
+    res.status,
+    body?.error?.code ?? "HTTP_ERROR",
+    body?.error?.message ?? fallback,
+    body?.error?.request_id,
+  );
+}
+
 function statusFilter(status: string, filter?: string | null): boolean {
   if (!filter || filter === "all") return true;
   if (filter === "ready") return status === "ready";
@@ -97,16 +184,91 @@ export class FixtureLibraryClient implements LibraryClient {
   private playlist: PlaylistRecord;
   private jobs = new Map<string, JobRecord>();
 
-  constructor() {
-    this.videos = structuredClone(FIXTURE_VIDEOS);
+  private readonly seedDemo: boolean;
+
+  constructor(options?: { seedDemo?: boolean }) {
+    this.seedDemo = options?.seedDemo ?? true;
+    this.videos = this.seedDemo ? structuredClone(FIXTURE_VIDEOS) : [];
     this.playlist = structuredClone(FIXTURE_PLAYLIST);
   }
 
+  private remember(video: VideoRecord): void {
+    this.videos = [
+      video,
+      ...this.videos.filter(
+        (item) => item.id !== video.id && item.youtube_video_id !== video.youtube_video_id,
+      ),
+    ];
+  }
+
+  private async refreshSavedLessons(): Promise<void> {
+    const res = await fetch("/api/learning-history", { credentials: "include", cache: "no-store" });
+    if (!res.ok) {
+      throw await readLibraryError(res, "Could not load saved lessons.");
+    }
+    const body = (await res.json()) as { items?: SavedLessonSummary[] };
+    this.videos = (body.items ?? []).map(summaryToVideo);
+  }
+
+  private async openSavedLesson(videoId: string): Promise<VideoRecord> {
+    const res = await fetch(`/api/learning-history/${videoId}/open`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw await readLibraryError(res, "Could not open the saved lesson.");
+    }
+    const body = (await res.json()) as SavedLessonDetail;
+    const video = detailToVideo(body);
+    this.remember(video);
+    return video;
+  }
+
+  private async persistLesson(input: {
+    videoId: string;
+    title: string;
+    channelTitle: string | null;
+    summary: string;
+    keyPoints: string[];
+    transcript: string;
+    sourceUrl: string;
+  }): Promise<{ video: VideoRecord; created: boolean }> {
+    const res = await fetch("/api/learning-history", {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        youtube_video_id: input.videoId,
+        title: input.title,
+        channel_title: input.channelTitle,
+        summary: input.summary,
+        key_points: input.keyPoints,
+        transcript: input.transcript,
+        source_url: input.sourceUrl,
+      }),
+    });
+    if (!res.ok) {
+      throw await readLibraryError(res, "Could not save this lesson.");
+    }
+    const body = (await res.json()) as SavedLessonDetail;
+    const video = detailToVideo(body);
+    this.remember(video);
+    return { video, created: Boolean(body.created) };
+  }
+
   async getDashboard(): Promise<DashboardStats> {
+    if (!this.seedDemo) {
+      await this.refreshSavedLessons();
+    }
     return fixtureDashboardStats(this.videos);
   }
 
   async listVideos(params?: ListParams): Promise<LibraryListPage<VideoRecord>> {
+    if (!this.seedDemo) {
+      await this.refreshSavedLessons();
+    }
     const filtered = this.videos.filter(
       (v) => matchesQuery(v.title, params?.q) && statusFilter(v.status, params?.status),
     );
@@ -114,6 +276,9 @@ export class FixtureLibraryClient implements LibraryClient {
   }
 
   async getVideo(videoId: string): Promise<VideoRecord> {
+    if (!this.seedDemo) {
+      return this.openSavedLesson(videoId);
+    }
     const found = this.videos.find((v) => v.id === videoId);
     if (!found) {
       throw new LibraryApiError(404, "NOT_FOUND", "Video not found in fixture library.");
@@ -122,6 +287,9 @@ export class FixtureLibraryClient implements LibraryClient {
   }
 
   async listPlaylists(params?: ListParams): Promise<LibraryListPage<PlaylistSummary>> {
+    if (!this.seedDemo) {
+      return pageSlice([], params, "fixture");
+    }
     const summary = fixturePlaylistSummary();
     summary.coverage = this.playlist.coverage;
     summary.status = this.playlist.status;
@@ -197,29 +365,109 @@ export class FixtureLibraryClient implements LibraryClient {
     }
 
     const videoId = parsed.value.kind === "video" ? parsed.value.videoId : "";
+    if (!this.seedDemo) {
+      await this.refreshSavedLessons();
+    }
     let existing = this.videos.find((v) => v.youtube_video_id === videoId);
     let created = false;
+    if (existing && !this.seedDemo) {
+      existing = await this.openSavedLesson(existing.id);
+    }
     if (!existing) {
-      if (!videoId.startsWith("vid")) {
+      const official = isOfficialYoutubeId(videoId) && !videoId.startsWith("vid");
+      if (!official && !videoId.startsWith("vid")) {
         throw new LibraryApiError(
           404,
           "NOT_FOUND",
-          "Unknown fixture video. Try https://www.youtube.com/watch?v=vidPublic01",
+          "Not a YouTube video URL. Paste a watch link like https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         );
+      }
+      let title = official ? `YouTube ${videoId}` : `Fixture import ${videoId} (synthetic)`;
+      let channel = official ? "YouTube" : "LearnLens Fixtures";
+      let transcriptAccess = false;
+      let status: VideoRecord["status"] = "needs_transcript";
+      let lesson: Record<string, unknown> | null = null;
+      if (official && !this.seedDemo) {
+        const lessonRes = await fetch("/api/gemini-lesson", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ videoId }),
+        });
+        const lessonBody = (await lessonRes.json().catch(() => null)) as {
+          error?: string;
+          title?: string;
+          summary?: string;
+          key_points?: string[];
+          transcript?: string;
+        } | null;
+        if (!lessonRes.ok) {
+          throw new LibraryApiError(
+            lessonRes.status,
+            "GEMINI_LESSON_FAILED",
+            lessonBody?.error || "Gemini could not build a lesson from this video.",
+          );
+        }
+        title = lessonBody?.title || title;
+        const summary = lessonBody?.summary || "";
+        const keyPoints = lessonBody?.key_points || [];
+        const transcript = lessonBody?.transcript || "";
+        const sourceUrl = parsed.value.kind === "video" ? parsed.value.canonicalUrl : "";
+        const saved = await this.persistLesson({
+          videoId,
+          title,
+          channelTitle: channel === "YouTube" ? null : channel,
+          summary,
+          keyPoints,
+          transcript,
+          sourceUrl,
+        });
+        existing = saved.video;
+        created = saved.created;
+        this.videos = [
+          existing,
+          ...this.videos.filter((item) => item.id !== existing!.id),
+        ];
+        return {
+          kind: "video",
+          result: {
+            video: existing,
+            created,
+            notices: [
+              {
+                code: "METADATA_ONLY",
+                message: "Gemini built this lesson from the public YouTube video.",
+              },
+            ],
+            companion_playlist_id:
+              parsed.value.kind === "video" ? parsed.value.companionPlaylistId ?? null : null,
+            transcript_from_url: false,
+          },
+        };
+      } else if (official) {
+        try {
+          const metaRes = await fetch(`/api/youtube-oembed?videoId=${encodeURIComponent(videoId)}`);
+          if (metaRes.ok) {
+            const meta = (await metaRes.json()) as { title?: string; author_name?: string };
+            if (meta.title) title = meta.title;
+            if (meta.author_name) channel = meta.author_name;
+          }
+        } catch {
+          // Title stays as the video id when oEmbed is unreachable.
+        }
       }
       existing = {
         id: crypto.randomUUID(),
         workspace_id: FIXTURE_WORKSPACE_ID,
         youtube_video_id: videoId,
-        title: `Fixture import ${videoId} (synthetic)`,
-        status: "needs_transcript",
-        channel_title: "LearnLens Fixtures",
+        title,
+        status,
+        channel_title: channel,
         duration_seconds: null,
         source_url: parsed.value.kind === "video" ? parsed.value.canonicalUrl : null,
-        transcript_access: false,
-        coverage: "metadata_only",
-        fixture_data: true,
-        metadata_json: { fixture_data: true },
+        transcript_access: transcriptAccess,
+        coverage: transcriptAccess ? "ready" : "metadata_only",
+        fixture_data: !official,
+        metadata_json: { fixture_data: !official, gemini_lesson: lesson },
       };
       this.videos = [existing, ...this.videos];
       created = true;
@@ -232,12 +480,12 @@ export class FixtureLibraryClient implements LibraryClient {
         created,
         notices: [
           {
-            code: "FIXTURE_DATA",
-            message: "Synthetic fixture metadata only — not a real YouTube transcript.",
-          },
-          {
-            code: "SOURCE_TRANSCRIPT_REQUIRED",
-            message: "Upload a permitted transcript to study this video.",
+            code: existing.fixture_data ? "FIXTURE_DATA" : "METADATA_ONLY",
+            message: existing.transcript_access
+              ? "Gemini built this lesson from the public YouTube video."
+              : existing.fixture_data
+                ? "Synthetic fixture metadata only — not a real YouTube transcript."
+                : "Imported the public watch URL.",
           },
         ],
         companion_playlist_id:
@@ -608,7 +856,7 @@ export function resolveLibraryMode(): LibraryClientMode {
 export function getLibraryClient(): LibraryClient {
   if (singleton) return singleton;
   const mode = resolveLibraryMode();
-  singleton = mode === "api" ? new HttpLibraryClient("") : new FixtureLibraryClient();
+  singleton = mode === "api" ? new HttpLibraryClient("") : new FixtureLibraryClient({ seedDemo: false });
   return singleton;
 }
 

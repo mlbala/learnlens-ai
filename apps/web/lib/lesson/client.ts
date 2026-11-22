@@ -4,10 +4,12 @@
  */
 
 import {
+  appendFixtureExchange,
   fixtureGetOrCreateThread,
   fixtureLessonBundle,
   fixtureListMessages,
   fixturePostMessage,
+  fixtureThreadScope,
 } from "@/lib/lesson/fixtures";
 import type {
   ChatMessage,
@@ -33,6 +35,7 @@ export interface LessonClient {
     threadId: string;
     question: string;
     explanationMode: ExplanationMode;
+    externalSearch?: boolean;
   }): Promise<PostChatResult>;
 }
 
@@ -41,6 +44,70 @@ export class FixtureLessonClient implements LessonClient {
 
   async getLessonBundle(videoId: string): Promise<LessonBundle> {
     const video = await getLibraryClient().getVideo(videoId).catch(() => null);
+    const generated = video?.metadata_json?.gemini_lesson as
+      | { summary?: string; key_points?: string[]; transcript?: string }
+      | undefined;
+    if (generated && (generated.summary || generated.transcript)) {
+      const text = generated.transcript || generated.summary || "";
+      const saved = video?.metadata_json?.gemini_segments as
+        | {
+            id: string;
+            ordinal: number;
+            text: string;
+            start_ms: number | null;
+            end_ms: number | null;
+            content_hash: string;
+          }[]
+        | undefined;
+      const snippets = saved?.length
+        ? saved.map((segment) => ({
+            id: segment.id,
+            ordinal: segment.ordinal,
+            text: segment.text,
+            start_ms: segment.start_ms,
+            end_ms: segment.end_ms,
+            content_hash: segment.content_hash,
+            fixture_data: false,
+          }))
+        : text
+            .split(/\n+/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .slice(0, 40)
+            .map((line, index) => ({
+              id: `${videoId}-line-${index}`,
+              ordinal: index,
+              text: line,
+              start_ms: null,
+              end_ms: null,
+              content_hash: String(index),
+              fixture_data: false,
+            }));
+      return {
+        chapters: [],
+        summaries: [
+          {
+            id: `${videoId}-gemini`,
+            workspace_id: video?.workspace_id || "",
+            scope_kind: "video",
+            scope_id: videoId,
+            summary_kind: "short",
+            revision: 1,
+            status: "ready",
+            summary: generated.summary || text,
+            key_points: generated.key_points || [],
+            claims: [],
+            examples: [],
+            evidence_segment_ids: [],
+            origin: "gemini_youtube",
+            fixture_data: false,
+          },
+        ],
+        snippets,
+        starter_questions: (generated.key_points || []).slice(0, 3),
+        fixture_data: false,
+      };
+    }
     if (!video?.transcript_access) {
       return {
         chapters: [],
@@ -73,8 +140,38 @@ export class FixtureLessonClient implements LessonClient {
     threadId: string;
     question: string;
     explanationMode: ExplanationMode;
+    externalSearch?: boolean;
   }): Promise<PostChatResult> {
     try {
+      const videoId = fixtureThreadScope(input.threadId);
+      const video = videoId ? await getLibraryClient().getVideo(videoId).catch(() => null) : null;
+      const lesson = video?.metadata_json?.gemini_lesson as
+        | { transcript?: string; summary?: string }
+        | undefined;
+      const transcript = lesson?.transcript || lesson?.summary || "";
+      if (transcript) {
+        const res = await fetch("/api/gemini-ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            question: input.question,
+            transcript,
+            title: video?.title,
+            explanationMode: input.explanationMode,
+            externalSearch: Boolean(input.externalSearch),
+          }),
+        });
+        const body = (await res.json().catch(() => null)) as { answer?: string; error?: string } | null;
+        if (!res.ok || !body?.answer) {
+          throw new LessonApiError(res.status || 502, "GEMINI_ASK_FAILED", body?.error || "Gemini could not answer.");
+        }
+        return appendFixtureExchange({
+          threadId: input.threadId,
+          question: input.question,
+          answer: body.answer,
+          explanationMode: input.explanationMode,
+        });
+      }
       return fixturePostMessage({
         threadId: input.threadId,
         question: input.question,
@@ -176,6 +273,7 @@ export class HttpLessonClient implements LessonClient {
     threadId: string;
     question: string;
     explanationMode: ExplanationMode;
+    externalSearch?: boolean;
   }): Promise<PostChatResult> {
     const csrf = readCookie("ll_csrf");
     const headers: Record<string, string> = {

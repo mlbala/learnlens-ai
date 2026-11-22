@@ -47,6 +47,20 @@ describe("FixtureLibraryClient", () => {
     }
   });
 
+  it("imports a real YouTube watch URL without fixture rejection", async () => {
+    const client = new FixtureLibraryClient();
+    const result = await client.importSource(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+    expect(result.kind).toBe("video");
+    if (result.kind === "video") {
+      expect(result.result.video.youtube_video_id).toBe("dQw4w9WgXcQ");
+      expect(result.result.video.fixture_data).toBe(false);
+      expect(result.result.video.transcript_access).toBe(false);
+      expect(result.result.transcript_from_url).toBe(false);
+    }
+  });
+
   it("rejects transcript upload without attestation", async () => {
     const client = new FixtureLibraryClient();
     await expect(

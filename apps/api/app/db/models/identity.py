@@ -6,7 +6,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -31,6 +39,12 @@ class User(Base, TimestampMixin):
 
 class Workspace(Base, TimestampMixin):
     __tablename__ = "workspaces"
+    __table_args__ = (
+        CheckConstraint(
+            "learning_history_limit >= 1 AND learning_history_limit <= 100",
+            name="ck_workspaces_learning_history_limit",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -39,6 +53,12 @@ class Workspace(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    learning_history_limit: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=10,
+        server_default="10",
     )
 
     memberships: Mapped[list[WorkspaceMembership]] = relationship(back_populates="workspace")

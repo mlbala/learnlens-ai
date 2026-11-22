@@ -2,6 +2,8 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
+from app.api.v1.learning_history import router as learning_history_router
+from app.api.v1.learning_history import settings_router as learning_history_settings_router
 from app.api.v1.me import router as me_router
 from app.api.v1.playlists import router as playlists_router
 from app.api.v1.settings_providers import router as settings_providers_router
@@ -14,6 +16,8 @@ __all__ = [
     "chat_router",
     "health_router",
     "jobs_router",
+    "learning_history_router",
+    "learning_history_settings_router",
     "me_router",
     "playlists_router",
     "settings_providers_router",

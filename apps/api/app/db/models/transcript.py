@@ -86,6 +86,8 @@ class TranscriptSegment(Base):
     end_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     speaker: Mapped[str | None] = mapped_column(String(120), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence_origin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evidence_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
