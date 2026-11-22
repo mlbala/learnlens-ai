@@ -65,24 +65,31 @@ export async function askGeminiLesson(input: {
   const endpoint =
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=` +
     encodeURIComponent(apiKey);
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: input.explanationMode === "simple" ? 700 : 2048,
-        responseMimeType: "application/json",
-      },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: input.explanationMode === "simple" ? 700 : 2048,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+  } catch {
+    return { ok: false, status: 503, error: "Gemini is busy." };
+  }
   const body = (await res.json().catch(() => null)) as {
-    error?: { message?: string };
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   } | null;
   if (!res.ok) {
-    return { ok: false, status: 502, error: body?.error?.message || "Gemini could not answer." };
+    if (res.status === 429 || res.status === 503) {
+      return { ok: false, status: 503, error: "Gemini is busy." };
+    }
+    return { ok: false, status: 502, error: "Gemini could not answer." };
   }
   const raw = body?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
   let parsed: unknown;

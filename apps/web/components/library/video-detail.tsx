@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { resolveLibraryMode } from "@/lib/library/client";
+import { LibraryApiError } from "@/lib/library/types";
 import { formatDuration } from "@/lib/library/coverage";
 import { useVideo } from "@/lib/library/query";
 
@@ -37,7 +38,13 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     return (
       <ErrorState
         title="Video unavailable"
-        message={query.error instanceof Error ? query.error.message : "Not found"}
+        message={
+          query.error instanceof LibraryApiError && query.error.code === "LESSON_NOT_IN_WORKSPACE"
+            ? "This lesson is not in this workspace."
+            : query.error instanceof Error
+              ? query.error.message
+              : "This lesson is not in this workspace."
+        }
         action={
           <Button type="button" variant="outline" onClick={() => void query.refetch()}>
             Retry

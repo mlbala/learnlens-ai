@@ -16,12 +16,20 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.contracts import ModelRequest, TextModel
+from app.ai.errors import ProviderTemporarilyUnavailable
 from app.ai.factory import build_text_model
 from app.core.settings import Settings
 from app.db.models import ExternalEvidence, TranscriptSegment, Video
 from app.db.models.chat import ChatMessage, ChatThread
 from app.db.repositories.chat import ChatMessageRepository, ChatThreadRepository
-from app.retrieval.session_lanes import ABSTAIN_BODY, ABSTAIN_HEADING, SessionReranker
+from app.retrieval.session_lanes import (
+    ABSTAIN_BODY,
+    ABSTAIN_HEADING,
+    ORIGIN_EXTERNAL,
+    ORIGIN_VIDEO,
+    SessionReranker,
+)
+from app.services.answer_usage import answer_usage_line
 from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
 from app.services.session_judge import SessionJudge, build_judge_request, select_judge
 from app.services.session_review import (
@@ -193,6 +201,8 @@ class SessionChatService:
         self._session_judge = judge
         self._threads = ChatThreadRepository(session)
         self._messages = ChatMessageRepository(session)
+        self._turn_input_tokens: int | None = None
+        self._turn_output_tokens: int | None = None
 
     async def get_thread(
         self,
@@ -269,6 +279,8 @@ class SessionChatService:
         cleaned = question.strip()
         if not cleaned:
             raise SessionChatError(422, "INVALID_QUESTION", "A question is required.")
+        self._turn_input_tokens = None
+        self._turn_output_tokens = None
         await self._require_video(workspace_id, video_id)
         thread = await self._ensure_thread(
             workspace_id=workspace_id,
@@ -316,9 +328,14 @@ class SessionChatService:
         except ReviewUnavailable:
             structured = withheld_answer()
             review_status = "withheld"
+        except ProviderTemporarilyUnavailable:
+            raise SessionChatError(503, "GEMINI_BUSY", "Gemini is busy.") from None
         structured["decision"] = packet.decision
         structured["kept"] = list(packet.kept)
         structured["review_status"] = review_status
+        structured["outside_lane_empty"] = bool(
+            external_search and packet.decision == "lesson_only"
+        )
         if not structured["lesson"]:
             raise SessionChatError(
                 422,
@@ -364,16 +381,38 @@ class SessionChatService:
         )
         await self._session.flush()
         segment_ids = await self._segment_ids(workspace_id, video_id)
+        video_kept = sum(
+            1 for passage in packet.passages if passage.evidence_origin == ORIGIN_VIDEO
+        )
+        outside_kept = sum(
+            1 for passage in packet.passages if passage.evidence_origin == ORIGIN_EXTERNAL
+        )
         logger.info(
-            "lesson_chat_turn_stored",
-            extra={
-                "workspace_id": str(workspace_id),
-                "video_id": str(video_id),
-                "thread_id": str(thread.id),
-                "external_search_enabled": external_search,
-                "review_status": review_status,
-                "prior_turns": min(len(turns_from_messages(prior)), HISTORY_TURN_LIMIT),
-            },
+            "%s",
+            answer_usage_line(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+                decision=str(packet.decision),
+                review_status=review_status,
+                external_search_enabled=external_search,
+                kept_video_passages=video_kept,
+                kept_outside_passages=outside_kept,
+                input_tokens=self._turn_input_tokens,
+                output_tokens=self._turn_output_tokens,
+                transcript="\n".join(
+                    passage.text
+                    for passage in packet.passages
+                    if passage.evidence_origin == ORIGIN_VIDEO
+                ),
+                snippet="\n".join(
+                    passage.text
+                    for passage in packet.passages
+                    if passage.evidence_origin == ORIGIN_EXTERNAL
+                ),
+                source_title="\n".join(str(row.get("title") or "") for row in packet.sources),
+                source_url="\n".join(str(row.get("url") or "") for row in packet.sources),
+            ),
         )
         return StoredTurn(
             thread=thread,
@@ -610,8 +649,6 @@ class SessionChatService:
         self,
         passages: tuple[Any, ...],
     ) -> dict[str, tuple[int | None, int | None]]:
-        from app.retrieval.session_lanes import ORIGIN_VIDEO
-
         ids = [passage.id for passage in passages if passage.evidence_origin == ORIGIN_VIDEO]
         if not ids:
             return {}
@@ -638,8 +675,17 @@ class SessionChatService:
                 prompt_version="lesson-followup-v1",
             )
         )
+        self._note_usage(result.usage)
         parsed = result.parsed if isinstance(result.parsed, dict) else {}
         return parsed
+
+    def _note_usage(self, usage: Any) -> None:
+        incoming = getattr(usage, "input_tokens", None)
+        outgoing = getattr(usage, "output_tokens", None)
+        if isinstance(incoming, int):
+            self._turn_input_tokens = (self._turn_input_tokens or 0) + incoming
+        if isinstance(outgoing, int):
+            self._turn_output_tokens = (self._turn_output_tokens or 0) + outgoing
 
     async def _ensure_thread(
         self,
@@ -687,7 +733,11 @@ class SessionChatService:
         )
         video = result.scalar_one_or_none()
         if video is None:
-            raise SessionChatError(404, "NOT_FOUND", "Resource not found.")
+            raise SessionChatError(
+                404,
+                "LESSON_NOT_IN_WORKSPACE",
+                "This lesson is not in this workspace.",
+            )
         return video
 
     async def _segment_ids(self, workspace_id: uuid.UUID, video_id: uuid.UUID) -> list[uuid.UUID]:

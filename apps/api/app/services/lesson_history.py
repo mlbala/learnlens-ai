@@ -19,17 +19,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import utcnow
 from app.db.models import (
     Chapter,
+    ChatMessage,
+    ChatThread,
     ExternalEvidence,
+    MessageCitation,
     SourceAsset,
     TranscriptSegment,
     Video,
     Workspace,
 )
 from app.domain.youtube_url import YoutubeUrlError, YoutubeUrlKind, parse_youtube_url
+from app.services.lesson_cache import (
+    LessonBodyCache,
+    cache_delete_prefix,
+    cache_get,
+    cache_put,
+    lesson_body_from_rows,
+    lesson_body_key,
+    lesson_body_prefix,
+    segments_from_body,
+)
 
 SOURCE_KIND_GEMINI_YOUTUBE = "gemini_youtube"
 EVIDENCE_ORIGIN_VIDEO_TRANSCRIPT = "video_transcript"
 EVIDENCE_PROVIDER_GEMINI_YOUTUBE = "gemini_youtube"
+LESSON_NOT_IN_WORKSPACE = "This lesson is not in this workspace."
 DEFAULT_LEARNING_HISTORY_LIMIT = 10
 MIN_LEARNING_HISTORY_LIMIT = 1
 MAX_LEARNING_HISTORY_LIMIT = 100
@@ -45,6 +59,15 @@ class LessonHistoryError(Exception):
         self.status_code = status_code
         self.code = code
         self.message = message
+
+
+def _summary_and_points(video: Video) -> tuple[str, list[str]]:
+    meta = video.metadata_json if isinstance(video.metadata_json, dict) else {}
+    lesson = meta.get("gemini_lesson") if isinstance(meta.get("gemini_lesson"), dict) else {}
+    summary = str(lesson.get("summary") or "")
+    raw_points = lesson.get("key_points") if isinstance(lesson.get("key_points"), list) else []
+    points = [str(point) for point in raw_points if str(point).strip()]
+    return summary, points
 
 
 def passage_hash(text: str) -> str:
@@ -68,8 +91,9 @@ def split_transcript(transcript: str) -> list[str]:
 
 
 class LessonHistoryService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: LessonBodyCache | None = None) -> None:
         self._session = session
+        self._cache = cache
 
     async def get_limit(self, workspace_id: uuid.UUID) -> int:
         workspace = await self._workspace(workspace_id)
@@ -135,6 +159,7 @@ class LessonHistoryService:
         )
         video.last_opened_at = utcnow()
         await self._session.flush()
+        self._forget_cache(workspace_id, video.id)
         await self.trim(workspace_id)
         # The saved row may have been kept; re-read so callers see the post-trim row.
         fresh = await self._video_in_workspace(video.id, workspace_id)
@@ -155,14 +180,14 @@ class LessonHistoryService:
     ) -> tuple[Video, list[TranscriptSegment]]:
         video = await self._gemini_video(video_id, workspace_id)
         if video is None:
-            raise LessonHistoryError(404, "NOT_FOUND", "Resource not found.")
+            raise LessonHistoryError(404, "LESSON_NOT_IN_WORKSPACE", LESSON_NOT_IN_WORKSPACE)
         video.last_opened_at = utcnow()
         await self._session.flush()
         await self.trim(workspace_id)
         fresh = await self._gemini_video(video_id, workspace_id)
         if fresh is None:
-            raise LessonHistoryError(404, "NOT_FOUND", "Resource not found.")
-        segments = await self._segments_for_video(fresh.id, workspace_id)
+            raise LessonHistoryError(404, "LESSON_NOT_IN_WORKSPACE", LESSON_NOT_IN_WORKSPACE)
+        segments = await self._load_segments(fresh)
         return fresh, segments
 
     async def get_lesson(
@@ -173,8 +198,8 @@ class LessonHistoryService:
     ) -> tuple[Video, list[TranscriptSegment]]:
         video = await self._gemini_video(video_id, workspace_id)
         if video is None:
-            raise LessonHistoryError(404, "NOT_FOUND", "Resource not found.")
-        segments = await self._segments_for_video(video.id, workspace_id)
+            raise LessonHistoryError(404, "LESSON_NOT_IN_WORKSPACE", LESSON_NOT_IN_WORKSPACE)
+        segments = await self._load_segments(video)
         return video, segments
 
     async def trim(self, workspace_id: uuid.UUID) -> None:
@@ -185,10 +210,33 @@ class LessonHistoryService:
         if not stale:
             return
         video_ids = [video.id for video in stale]
+        for video_id in video_ids:
+            self._forget_cache(workspace_id, video_id)
+        await self._session.execute(
+            delete(MessageCitation).where(
+                MessageCitation.workspace_id == workspace_id,
+                MessageCitation.video_id.in_(video_ids),
+            )
+        )
         await self._session.execute(
             delete(ExternalEvidence).where(
                 ExternalEvidence.workspace_id == workspace_id,
                 ExternalEvidence.video_id.in_(video_ids),
+            )
+        )
+        thread_ids = select(ChatThread.id).where(
+            ChatThread.workspace_id == workspace_id,
+            ChatThread.scope_kind == "video",
+            ChatThread.scope_id.in_(video_ids),
+        )
+        await self._session.execute(
+            delete(ChatMessage).where(ChatMessage.thread_id.in_(thread_ids))
+        )
+        await self._session.execute(
+            delete(ChatThread).where(
+                ChatThread.workspace_id == workspace_id,
+                ChatThread.scope_kind == "video",
+                ChatThread.scope_id.in_(video_ids),
             )
         )
         self._delete_lesson_points(workspace_id, video_ids)
@@ -219,6 +267,22 @@ class LessonHistoryService:
             delete(Video).where(Video.workspace_id == workspace_id, Video.id.in_(video_ids))
         )
         await self._session.flush()
+
+    def _forget_cache(self, workspace_id: uuid.UUID, video_id: uuid.UUID) -> None:
+        cache_delete_prefix(self._cache, lesson_body_prefix(workspace_id, video_id))
+
+    async def _load_segments(self, video: Video) -> list[TranscriptSegment]:
+        asset = await self._gemini_asset(video.id, video.workspace_id)
+        summary, points = _summary_and_points(video)
+        if asset is not None and asset.content_hash:
+            key = lesson_body_key(video.workspace_id, video.id, asset.content_hash)
+            cached = cache_get(self._cache, key)
+            if cached is not None:
+                return segments_from_body(cached)  # type: ignore[return-value]
+            rows = await self._segments_for_video(video.id, video.workspace_id)
+            cache_put(self._cache, key, lesson_body_from_rows(summary, points, rows))
+            return rows
+        return await self._segments_for_video(video.id, video.workspace_id)
 
     def _delete_lesson_points(self, workspace_id: uuid.UUID, video_ids: list[uuid.UUID]) -> None:
         """Drop both evidence origins for each trimmed lesson. Limits stay unchanged."""
@@ -422,6 +486,7 @@ class LessonHistoryService:
         if same:
             return existing
 
+        self._forget_cache(workspace_id, video.id)
         asset.content_hash = digest
         asset.source_revision = int(asset.source_revision) + 1
         asset.timecode_quality = "none"

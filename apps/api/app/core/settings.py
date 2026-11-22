@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +46,8 @@ class Settings(BaseSettings):
 
     # Optional local Redis (Compose profile) or cloud Redis URL.
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
+    # Lesson-body cache only. Off unless set, so tests never require Redis.
+    lesson_body_cache_enabled: bool = Field(default=False, alias="LESSON_BODY_CACHE_ENABLED")
 
     # Exact-origin allowlist (comma-separated). No wildcards.
     cors_origins: str = Field(
@@ -248,6 +249,7 @@ class Settings(BaseSettings):
         "qdrant_dense_only",
         "media_processing_enabled",
         "ai_guardrails_block_direct_injection",
+        "lesson_body_cache_enabled",
         mode="before",
     )
     @classmethod
