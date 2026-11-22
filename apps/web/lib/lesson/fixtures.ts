@@ -280,6 +280,63 @@ export function fixtureGetOrCreateThread(videoId: string): ChatThread {
   return thread;
 }
 
+export function fixtureThreadScope(threadId: string): string | null {
+  for (const store of threadByVideo.values()) {
+    if (store.thread.id === threadId) return store.thread.scope_id;
+  }
+  return null;
+}
+
+export function appendFixtureExchange(input: {
+  threadId: string;
+  question: string;
+  answer: string;
+  explanationMode: string;
+}): PostChatResult {
+  const store = [...threadByVideo.values()].find((s) => s.thread.id === input.threadId);
+  if (!store) {
+    throw Object.assign(new Error("Thread not found"), { code: "NOT_FOUND", status: 404 });
+  }
+  const now = new Date().toISOString();
+  const user: ChatMessage = {
+    id: crypto.randomUUID(),
+    thread_id: store.thread.id,
+    workspace_id: WS,
+    role: "user",
+    content: input.question.trim(),
+    explanation_mode: input.explanationMode,
+    unsupported: false,
+    claims: [],
+    analogies: [],
+    citations: [],
+    created_at: now,
+    stream_state: "complete",
+  };
+  const assistant: ChatMessage = {
+    id: crypto.randomUUID(),
+    thread_id: store.thread.id,
+    workspace_id: WS,
+    role: "assistant",
+    content: input.answer,
+    explanation_mode: input.explanationMode,
+    confidence_label: "model",
+    unsupported: false,
+    claims: [],
+    analogies: [],
+    citations: [],
+    created_at: now,
+    stream_state: "complete",
+  };
+  store.messages.push(user, assistant);
+  return {
+    user_message: user,
+    assistant_message: assistant,
+    unsupported: false,
+    confidence_label: "model",
+    explanation_mode: input.explanationMode,
+  };
+}
+
 export function fixtureListMessages(threadId: string): ChatMessage[] {
   for (const store of threadByVideo.values()) {
     if (store.thread.id === threadId) return structuredClone(store.messages);
