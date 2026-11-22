@@ -1,7 +1,7 @@
 """One stored chat thread per workspace and lesson video.
 
-Neon holds the turns. This session does not embed passages, does not write
-outside-search hits into transcript_segments, and does not call Qdrant.
+Neon holds the turns and outside-search rows. Qdrant holds derived points for
+the video lane and the external lane. Full passage text stays in Neon.
 """
 
 from __future__ import annotations
@@ -18,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.contracts import ModelRequest, TextModel
 from app.ai.factory import build_text_model
 from app.core.settings import Settings
-from app.db.models import TranscriptSegment, Video
+from app.db.models import ExternalEvidence, TranscriptSegment, Video
 from app.db.models.chat import ChatMessage, ChatThread
 from app.db.repositories.chat import ChatMessageRepository, ChatThreadRepository
+from app.retrieval.session_lanes import ABSTAIN_BODY, ABSTAIN_HEADING, SessionReranker
+from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +117,13 @@ def pack_followup(turns: list[FollowupTurn], *, external_search: bool) -> str:
     return "\n".join(lines).strip()
 
 
-def model_user_input(*, packed_history: str, question: str, external_search: bool) -> str:
+def model_user_input(
+    *,
+    packed_history: str,
+    question: str,
+    external_search: bool,
+    evidence_block: str = "",
+) -> str:
     """Prompt for the new question plus the packed history. No other thread is included."""
     search_line = "external_search: on" if external_search else "external_search: off"
     current = [
@@ -129,7 +137,11 @@ def model_user_input(*, packed_history: str, question: str, external_search: boo
             "The live search checkbox is off. Use the lesson panel only. "
             "Do not use an earlier paper summary."
         )
-    blocks = [block for block in (packed_history.strip(), "\n".join(current)) if block]
+    blocks = [
+        block
+        for block in (packed_history.strip(), evidence_block.strip(), "\n".join(current))
+        if block
+    ]
     return "\n\n".join(blocks)
 
 
@@ -154,10 +166,12 @@ class SessionChatService:
         session: AsyncSession,
         settings: Settings,
         text_model: TextModel | None = None,
+        reranker: SessionReranker | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._text_model = text_model
+        self._reranker = reranker
         self._threads = ChatThreadRepository(session)
         self._messages = ChatMessageRepository(session)
 
@@ -253,16 +267,24 @@ class SessionChatService:
             limit=HISTORY_TURN_LIMIT * 4,
         )
         packed = pack_followup(turns_from_messages(prior), external_search=external_search)
-        prompt = model_user_input(
-            packed_history=packed,
+        packet = await self._packet(
+            workspace_id=workspace_id,
+            video_id=video_id,
+            thread_id=thread.id,
             question=cleaned,
             external_search=external_search,
         )
         if answer is None:
-            payload = await self._complete(prompt)
+            structured = await self._answer_from_packet(
+                packet,
+                packed_history=packed,
+                question=cleaned,
+                external_search=external_search,
+            )
         else:
-            payload = answer
-        structured = _structured_answer(payload, external_search=external_search)
+            structured = _structured_answer(answer, external_search=external_search)
+        structured["decision"] = packet.decision
+        structured["kept"] = list(packet.kept)
         if not structured["lesson"]:
             raise SessionChatError(
                 422,
@@ -289,7 +311,16 @@ class SessionChatService:
         )
         if assistant.created_at <= user.created_at:
             assistant.created_at = user.created_at + timedelta(microseconds=1)
-            await self._session.flush()
+        await self._session.execute(
+            update(ExternalEvidence)
+            .where(
+                ExternalEvidence.workspace_id == workspace_id,
+                ExternalEvidence.thread_id == thread.id,
+                ExternalEvidence.message_id.is_(None),
+            )
+            .values(message_id=user.id)
+        )
+        await self._session.flush()
         segment_ids = await self._segment_ids(workspace_id, video_id)
         logger.info(
             "lesson_chat_turn_stored",
@@ -307,6 +338,103 @@ class SessionChatService:
             assistant_message=assistant,
             segment_ids=segment_ids,
         )
+
+    async def retrieve(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        user_id: uuid.UUID,
+        video_id: uuid.UUID,
+        question: str,
+        external_search: bool,
+        sources: list[SearchHitInput],
+    ) -> tuple[ChatThread, EvidencePacket]:
+        """Store this turn's search hits, index both origins, and decide the lanes."""
+        cleaned = question.strip()
+        if not cleaned:
+            raise SessionChatError(422, "INVALID_QUESTION", "A question is required.")
+        video = await self._require_video(workspace_id, video_id)
+        thread = await self._ensure_thread(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            video_id=video_id,
+        )
+        await self._stamp_segments(
+            workspace_id=workspace_id,
+            video_id=video_id,
+            thread_id=thread.id,
+        )
+        evidence = self._evidence_service()
+        if external_search and sources:
+            await evidence.store_hits(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+                hits=sources,
+            )
+        packet = await evidence.build_packet(
+            workspace_id=workspace_id,
+            video_id=video_id,
+            thread_id=thread.id,
+            question=cleaned,
+            external_search=external_search,
+            watch_url=video.source_url or "",
+        )
+        return thread, packet
+
+    async def _packet(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        video_id: uuid.UUID,
+        thread_id: uuid.UUID,
+        question: str,
+        external_search: bool,
+    ) -> EvidencePacket:
+        video = await self._require_video(workspace_id, video_id)
+        return await self._evidence_service().build_packet(
+            workspace_id=workspace_id,
+            video_id=video_id,
+            thread_id=thread_id,
+            question=question,
+            external_search=external_search,
+            watch_url=video.source_url or "",
+        )
+
+    def _evidence_service(self) -> SessionEvidenceService:
+        return SessionEvidenceService(self._session, self._settings, reranker=self._reranker)
+
+    async def _answer_from_packet(
+        self,
+        packet: EvidencePacket,
+        *,
+        packed_history: str,
+        question: str,
+        external_search: bool,
+    ) -> dict[str, Any]:
+        if packet.decision == "abstain":
+            return {
+                "v": 1,
+                "lesson": [{"heading": ABSTAIN_HEADING, "body": ABSTAIN_BODY}],
+                "external": [],
+                "sources": [],
+            }
+        prompt = model_user_input(
+            packed_history=packed_history,
+            question=question,
+            external_search=external_search,
+            evidence_block=packet.prompt_block,
+        )
+        payload = await self._complete(prompt)
+        structured = _structured_answer(payload, external_search=packet.decision == "blend")
+        if not packet.video_covered:
+            structured["lesson"] = [{"heading": ABSTAIN_HEADING, "body": ABSTAIN_BODY}]
+        if packet.decision == "blend":
+            structured["sources"] = list(packet.sources)
+        else:
+            structured["external"] = []
+            structured["sources"] = []
+        return structured
 
     async def _complete(self, prompt: str) -> dict[str, Any]:
         model = self._text_model or build_text_model(self._settings)

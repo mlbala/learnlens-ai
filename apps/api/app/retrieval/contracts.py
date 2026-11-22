@@ -32,9 +32,15 @@ class ChunkIndexRecord:
     playlist_ids: tuple[uuid.UUID, ...] = ()
     processing_version: str = ""
     text_preview: str = ""
+    evidence_origin: str = ""
+    evidence_provider: str = ""
+    thread_id: uuid.UUID | None = None
+    evidence_id: uuid.UUID | None = None
+    source_url: str = ""
 
     def payload(self) -> dict[str, Any]:
         preview = self.text_preview or self.text[:240]
+        segment_id = str(self.segment_ids[0]) if self.segment_ids else None
         return {
             "workspace_id": str(self.workspace_id),
             "video_id": str(self.video_id),
@@ -42,6 +48,8 @@ class ChunkIndexRecord:
             "source_asset_id": str(self.source_asset_id),
             "source_revision": int(self.source_revision),
             "segment_ids": [str(s) for s in self.segment_ids],
+            "segment_id": segment_id,
+            "evidence_id": None if self.evidence_id is None else str(self.evidence_id),
             "chunk_id": str(self.chunk_id),
             "start_ms": self.start_ms,
             "end_ms": self.end_ms,
@@ -51,6 +59,10 @@ class ChunkIndexRecord:
             "embedding_profile": self.embedding_profile,
             "processing_version": self.processing_version,
             "text_preview": preview,
+            "evidence_origin": self.evidence_origin,
+            "evidence_provider": self.evidence_provider,
+            "thread_id": None if self.thread_id is None else str(self.thread_id),
+            "source_url": self.source_url,
             # Lexical field retained for in-memory BM25; Qdrant uses Document vector.
             "text": self.text,
         }
@@ -81,6 +93,8 @@ class TenantScopeFilter:
 
     workspace_id: uuid.UUID
     video_ids: tuple[uuid.UUID, ...]
+    evidence_origin: str | None = None
+    thread_id: uuid.UUID | None = None
 
 
 class VectorStore(Protocol):

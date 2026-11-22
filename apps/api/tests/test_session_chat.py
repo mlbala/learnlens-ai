@@ -341,7 +341,7 @@ def test_fake_model_followup_omits_external_panel_when_checkbox_is_off(client: T
                 workspace_id=uuid.UUID(owner["workspace"]["id"]),
                 user_id=uuid.UUID(owner["user"]["id"]),
                 video_id=uuid.UUID(video_id),
-                question="explain that",
+                question="explain that passage one",
                 explanation_mode="standard",
                 external_search=False,
                 answer=None,
@@ -368,7 +368,13 @@ def test_http_fake_model_answers_without_a_paid_call(client: TestClient) -> None
     _register(client, "chat-fake@example.com")
     saved = _save(client, 4)
     video_id = saved["video"]["id"]
-    created = _post(client, video_id, "Give an example", external_search=False, answer=None)
+    created = _post(
+        client,
+        video_id,
+        "Give an example of passage one",
+        external_search=False,
+        answer=None,
+    )
     body = created["assistant_message"]["content_json"]["lesson"][0]["body"]
     assert body == "Fixture lesson answer about the previous lesson panel."
     assert created["assistant_message"]["content_json"]["external"] == []

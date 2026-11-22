@@ -2,6 +2,7 @@
 
 from app.db.models.audit import AuditEvent
 from app.db.models.chat import ChatMessage, ChatThread, MessageCitation
+from app.db.models.evidence import ExternalEvidence
 from app.db.models.identity import Session, User, Workspace, WorkspaceMembership
 from app.db.models.indexing import IndexManifest
 from app.db.models.jobs import IngestionJob, OutboxEvent
@@ -41,6 +42,7 @@ __all__ = [
     "ChatMessage",
     "MessageCitation",
     "AuditEvent",
+    "ExternalEvidence",
     "UsageLimit",
     "MediaAsset",
     "MediaFrame",

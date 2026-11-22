@@ -67,6 +67,8 @@ def build_tenant_scope(
     *,
     workspace_id: uuid.UUID | str,
     video_ids: list[uuid.UUID | str] | tuple[uuid.UUID | str, ...],
+    evidence_origin: str | None = None,
+    thread_id: uuid.UUID | str | None = None,
 ) -> TenantScopeFilter:
     ws = parse_uuid(workspace_id, field_name="workspace_id")
     vids = parse_uuid_list(list(video_ids), field_name="video_ids")
@@ -75,7 +77,18 @@ def build_tenant_scope(
             "Authorized video_ids must be non-empty for retrieval.",
             details={"field": "video_ids"},
         )
-    return TenantScopeFilter(workspace_id=ws, video_ids=vids)
+    origin = evidence_origin.strip() if isinstance(evidence_origin, str) else None
+    if origin == "":
+        origin = None
+    parsed_thread = (
+        None if thread_id is None else parse_uuid(thread_id, field_name="thread_id")
+    )
+    return TenantScopeFilter(
+        workspace_id=ws,
+        video_ids=vids,
+        evidence_origin=origin,
+        thread_id=parsed_thread,
+    )
 
 
 def payload_matches_scope(payload: dict[str, Any], scope: TenantScopeFilter) -> bool:
@@ -84,6 +97,18 @@ def payload_matches_scope(payload: dict[str, Any], scope: TenantScopeFilter) -> 
         vid = parse_uuid(payload.get("video_id"), field_name="video_id")
     except InvalidRetrievalFilter:
         return False
-    if ws != scope.workspace_id:
+    if ws != scope.workspace_id or vid not in scope.video_ids:
         return False
-    return vid in scope.video_ids
+    if scope.evidence_origin is not None:
+        # A point with no evidence_origin is invalid for a lane search.
+        origin = str(payload.get("evidence_origin") or "").strip()
+        if not origin or origin != scope.evidence_origin:
+            return False
+    if scope.thread_id is not None:
+        try:
+            point_thread = parse_uuid(payload.get("thread_id"), field_name="thread_id")
+        except InvalidRetrievalFilter:
+            return False
+        if point_thread != scope.thread_id:
+            return False
+    return True

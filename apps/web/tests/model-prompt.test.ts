@@ -53,4 +53,33 @@ describe("buildLessonModelPrompt", () => {
     expect(prompt).toContain("openalex");
     expect(prompt).toContain("why");
   });
+
+  it("puts the video block before outside text and leaves the full transcript out", () => {
+    const prompt = buildLessonModelPrompt({
+      transcript: "FULL_TRANSCRIPT_SHOULD_STAY_OUT",
+      question: "How do leaves capture sunlight?",
+      externalSearch: true,
+      evidence: [
+        {
+          id: "video-1",
+          evidence_origin: "video_transcript",
+          text: "Leaves capture sunlight.",
+        },
+        {
+          id: "paper-1",
+          evidence_origin: "external_search",
+          text: "OUTSIDE_SNIPPET_ONLY",
+        },
+      ],
+      sources: [],
+    });
+    const videoAt = prompt.indexOf("BLOCK video_transcript");
+    const outsideAt = prompt.indexOf("BLOCK external_search");
+    expect(videoAt).toBeGreaterThan(-1);
+    expect(outsideAt).toBeGreaterThan(videoAt);
+    expect(prompt.slice(0, outsideAt)).not.toContain("OUTSIDE_SNIPPET_ONLY");
+    expect(prompt).toContain("Leaves capture sunlight.");
+    expect(prompt).not.toContain("FULL_TRANSCRIPT_SHOULD_STAY_OUT");
+    expect(prompt).not.toContain("score");
+  });
 });

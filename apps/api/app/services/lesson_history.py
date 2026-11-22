@@ -1,12 +1,14 @@
 """Durable Gemini lesson history — Neon is the only copy.
 
 Stores the public watch URL as a lesson row plus ordered transcript passages.
-Does not download YouTube media, write object storage, or touch Qdrant.
+Does not download YouTube media or write object storage. Trimming a lesson
+also deletes its outside-search rows and both origins of its Qdrant points.
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import uuid
 from datetime import UTC, datetime
@@ -15,7 +17,14 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import utcnow
-from app.db.models import Chapter, SourceAsset, TranscriptSegment, Video, Workspace
+from app.db.models import (
+    Chapter,
+    ExternalEvidence,
+    SourceAsset,
+    TranscriptSegment,
+    Video,
+    Workspace,
+)
 from app.domain.youtube_url import YoutubeUrlError, YoutubeUrlKind, parse_youtube_url
 
 SOURCE_KIND_GEMINI_YOUTUBE = "gemini_youtube"
@@ -26,6 +35,8 @@ MIN_LEARNING_HISTORY_LIMIT = 1
 MAX_LEARNING_HISTORY_LIMIT = 100
 _MAX_PASSAGES = 200
 _BLANK_LINES = re.compile(r"\n\s*\n")
+
+logger = logging.getLogger(__name__)
 
 
 class LessonHistoryError(Exception):
@@ -175,6 +186,13 @@ class LessonHistoryService:
             return
         video_ids = [video.id for video in stale]
         await self._session.execute(
+            delete(ExternalEvidence).where(
+                ExternalEvidence.workspace_id == workspace_id,
+                ExternalEvidence.video_id.in_(video_ids),
+            )
+        )
+        self._delete_lesson_points(workspace_id, video_ids)
+        await self._session.execute(
             update(Chapter)
             .where(Chapter.workspace_id == workspace_id, Chapter.video_id.in_(video_ids))
             .values(start_segment_id=None, end_segment_id=None)
@@ -201,6 +219,36 @@ class LessonHistoryService:
             delete(Video).where(Video.workspace_id == workspace_id, Video.id.in_(video_ids))
         )
         await self._session.flush()
+
+    def _delete_lesson_points(self, workspace_id: uuid.UUID, video_ids: list[uuid.UUID]) -> None:
+        """Drop both evidence origins for each trimmed lesson. Limits stay unchanged."""
+        try:
+            from app.core.settings import get_settings
+            from app.retrieval.factory import build_vector_store
+            from app.retrieval.profile import active_embedding_profile
+
+            settings = get_settings()
+            profile = active_embedding_profile(settings)
+            store = build_vector_store(settings)
+            collection = store.ensure_collection(
+                profile_id=profile.profile_id,
+                dimensions=profile.dimensions,
+            )
+            for video_id in video_ids:
+                store.delete_by_video(
+                    collection=collection,
+                    workspace_id=workspace_id,
+                    video_id=video_id,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "lesson_index_delete_failed",
+                extra={
+                    "workspace_id": str(workspace_id),
+                    "video_count": len(video_ids),
+                    "error_type": type(exc).__name__,
+                },
+            )
 
     async def _workspace(self, workspace_id: uuid.UUID) -> Workspace:
         workspace = await self._session.get(Workspace, workspace_id)

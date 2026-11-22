@@ -26,6 +26,15 @@ from app.retrieval.profile import collection_name_for
 
 logger = logging.getLogger("learnlens.retrieval.qdrant")
 
+PAYLOAD_INDEX_FIELDS = (
+    "workspace_id",
+    "video_id",
+    "embedding_profile",
+    "chunk_id",
+    "evidence_origin",
+    "thread_id",
+)
+
 
 class QdrantCloudStore:
     """Connects exclusively via QDRANT_URL + QDRANT_API_KEY (no local Docker Qdrant)."""
@@ -65,6 +74,7 @@ class QdrantCloudStore:
                         expected_dimensions=dimensions,
                         actual_dimensions=size,
                     )
+                self._ensure_payload_indexes(name, strict=False)
                 return name
 
             self._client.create_collection(
@@ -81,13 +91,7 @@ class QdrantCloudStore:
                     ),
                 },
             )
-            # Tenant / scope payload indexes (keyword) for filtered search.
-            for field_name in ("workspace_id", "video_id", "embedding_profile", "chunk_id"):
-                self._client.create_payload_index(
-                    collection_name=name,
-                    field_name=field_name,
-                    field_schema=models.PayloadSchemaType.KEYWORD,
-                )
+            self._ensure_payload_indexes(name, strict=True)
             return name
         except EmbeddingProfileMismatch:
             raise
@@ -115,6 +119,9 @@ class QdrantCloudStore:
         if vectors is not None and getattr(vectors, "size", None) is not None:
             return int(vectors.size)
         return None
+
+    def _ensure_payload_indexes(self, name: str, *, strict: bool) -> None:
+        _ensure_payload_indexes_on(self._client, name, strict=strict)
 
     def count_points(self, collection: str) -> int:
         try:
@@ -251,7 +258,12 @@ class QdrantCloudStore:
                 expected_dimensions=dimensions,
                 actual_dimensions=len(dense_vector),
             )
-        query_filter = _tenant_filter(scope.workspace_id, scope.video_ids)
+        query_filter = _tenant_filter(
+            scope.workspace_id,
+            scope.video_ids,
+            evidence_origin=scope.evidence_origin,
+            thread_id=scope.thread_id,
+        )
         try:
             if dense_only:
                 response = self._client.query_points(
@@ -313,20 +325,53 @@ class QdrantCloudStore:
 def _tenant_filter(
     workspace_id: uuid.UUID,
     video_ids: tuple[uuid.UUID, ...],
+    *,
+    evidence_origin: str | None = None,
+    thread_id: uuid.UUID | None = None,
 ) -> models.Filter:
     """Always require workspace_id + authorized video IDs (MatchValue / MatchAny)."""
-    return models.Filter(
-        must=[
+    must: list[Any] = [
+        models.FieldCondition(
+            key="workspace_id",
+            match=models.MatchValue(value=str(workspace_id)),
+        ),
+        models.FieldCondition(
+            key="video_id",
+            match=models.MatchAny(any=[str(v) for v in video_ids]),
+        ),
+    ]
+    if evidence_origin:
+        must.append(
             models.FieldCondition(
-                key="workspace_id",
-                match=models.MatchValue(value=str(workspace_id)),
-            ),
+                key="evidence_origin",
+                match=models.MatchValue(value=evidence_origin),
+            )
+        )
+    if thread_id is not None:
+        must.append(
             models.FieldCondition(
-                key="video_id",
-                match=models.MatchAny(any=[str(v) for v in video_ids]),
-            ),
-        ]
-    )
+                key="thread_id",
+                match=models.MatchValue(value=str(thread_id)),
+            )
+        )
+    return models.Filter(must=must)
+
+
+def _ensure_payload_indexes_on(client: QdrantClient, name: str, *, strict: bool) -> None:
+    for field_name in PAYLOAD_INDEX_FIELDS:
+        try:
+            client.create_payload_index(
+                collection_name=name,
+                field_name=field_name,
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+        except Exception:
+            if strict:
+                raise
+            logger.info(
+                "qdrant_payload_index_skipped",
+                extra={"collection": name, "field": field_name},
+            )
 
 
 def _hits_from_points(

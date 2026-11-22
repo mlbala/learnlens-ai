@@ -781,6 +781,46 @@ class PrepareLessonChatResponse(BaseModel):
     segment_ids: list[uuid.UUID]
 
 
+class LessonSearchHitIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(default="", max_length=500)
+    url: str = Field(min_length=8, max_length=2_048)
+    snippet: str = Field(default="", max_length=4_000)
+    provider: str = Field(pattern="^(tavily|semantic_scholar|openalex)$")
+    kind: str = Field(default="other", pattern="^(paper|official|other)$")
+
+
+class RetrieveLessonChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=8_000)
+    external_search: bool = True
+    sources: list[LessonSearchHitIn] = Field(default_factory=list, max_length=8)
+
+
+class EvidencePassageOut(BaseModel):
+    id: uuid.UUID
+    evidence_origin: str
+    evidence_provider: str
+    text: str
+    title: str = ""
+    source_url: str = ""
+
+
+class KeptEvidenceOut(BaseModel):
+    id: uuid.UUID
+    evidence_origin: str
+
+
+class RetrieveLessonChatResponse(BaseModel):
+    thread_id: uuid.UUID
+    decision: str
+    video_covered: bool
+    passages: list[EvidencePassageOut]
+    kept: list[KeptEvidenceOut]
+
+
 class LessonChatStateResponse(BaseModel):
     thread: ChatThreadOut | None = None
     messages: list[LessonChatMessageOut]

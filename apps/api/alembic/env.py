@@ -10,6 +10,7 @@ from alembic import context
 from app.db.base import Base
 from app.db.models import (  # noqa: F401 — register metadata
     Chapter,
+    ExternalEvidence,
     IngestionJob,
     OutboxEvent,
     Playlist,

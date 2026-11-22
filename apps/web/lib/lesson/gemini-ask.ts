@@ -1,5 +1,5 @@
 import { asTutorAnswer, type TutorAnswer } from "@/lib/lesson/answer";
-import { buildLessonModelPrompt } from "@/lib/lesson/model-prompt";
+import { buildLessonModelPrompt, type PromptEvidence } from "@/lib/lesson/model-prompt";
 import type { ExplanationMode } from "@/lib/lesson/types";
 import { searchTopicSources, type TopicSource } from "@/lib/search/topic-sources";
 
@@ -30,6 +30,8 @@ export async function askGeminiLesson(input: {
   explanationMode?: ExplanationMode | string;
   externalSearch: boolean;
   packedHistory?: string;
+  evidence?: PromptEvidence[];
+  knownSources?: TopicSource[];
 }): Promise<GeminiAskResult> {
   const apiKey = runtimeEnv("GEMINI_API_KEY");
   const configured = runtimeEnv("AI_CHAT_MODEL");
@@ -45,7 +47,11 @@ export async function askGeminiLesson(input: {
     return { ok: false, status: 400, error: "Question and lesson text are required." };
   }
 
-  const found = input.externalSearch ? await searchTopicSources(question) : [];
+  const found = input.evidence
+    ? (input.knownSources ?? [])
+    : input.externalSearch
+      ? await searchTopicSources(question)
+      : [];
   const prompt = buildLessonModelPrompt({
     title: input.title,
     transcript,
@@ -54,6 +60,7 @@ export async function askGeminiLesson(input: {
     externalSearch: input.externalSearch,
     packedHistory: input.packedHistory,
     sources: storedSources(found, input.externalSearch),
+    evidence: input.evidence,
   });
   const endpoint =
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=` +
