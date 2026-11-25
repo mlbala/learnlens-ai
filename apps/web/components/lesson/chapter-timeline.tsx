@@ -59,7 +59,15 @@ export function ChapterTimeline({ chapters, onSeek, className }: ChapterTimeline
                   Jump
                 </Button>
               ) : (
-                <span className="shrink-0 text-xs text-muted-foreground">No jump</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled
+                  aria-label={`Chapter ${chapter.title} has no verified time`}
+                >
+                  Jump
+                </Button>
               )}
             </li>
           );

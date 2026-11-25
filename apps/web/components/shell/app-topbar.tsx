@@ -2,30 +2,32 @@
 
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { ProviderBadge } from "@/components/patterns/provider-badge";
+import { AccountStatus } from "@/components/shell/account-status";
 import { BrandMark } from "@/components/shell/brand-mark";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { usePageTitleValue } from "@/components/shell/page-title";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { videosSearchHref } from "@/lib/library/search-href";
 import { breadcrumbForPath } from "@/lib/navigation";
 
 type AppTopbarProps = {
-  /** Fixture display name — not a live auth session claim. */
-  workspaceLabel?: string;
   providerLabel?: string;
   providerConfigured?: boolean;
 };
 
 export function AppTopbar({
-  workspaceLabel = "Personal workspace",
   providerLabel = "fake",
   providerConfigured = true,
 }: AppTopbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [search, setSearch] = useState("");
   const pageTitle = usePageTitleValue();
   const crumbs = breadcrumbForPath(pathname).map((crumb, index, all) => {
     const isLast = index === all.length - 1;
@@ -74,9 +76,17 @@ export function AppTopbar({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div className="relative hidden w-56 lg:block xl:w-72">
+          <form
+            role="search"
+            className="relative hidden w-56 lg:block xl:w-72"
+            onSubmit={(event) => {
+              event.preventDefault();
+              // Saved lesson titles only. Transcript text, chat, and outside snippets are not searched.
+              router.push(videosSearchHref(search));
+            }}
+          >
             <Label htmlFor="app-search" className="sr-only">
-              Search library titles
+              Search lesson titles
             </Label>
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -87,25 +97,18 @@ export function AppTopbar({
               type="search"
               placeholder="Search titles…"
               className="h-9 pl-9"
-              disabled
-              aria-describedby="app-search-hint"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              autoComplete="off"
             />
-            <p id="app-search-hint" className="sr-only">
-              Search connects in a later phase. Control is disabled for now.
-            </p>
-          </div>
+          </form>
           <ProviderBadge
             providerLabel={providerLabel}
             configured={providerConfigured}
             className="hidden shrink-0 sm:inline-flex"
           />
           <ThemeToggle />
-          <div
-            className="hidden h-9 max-w-[9rem] items-center truncate rounded-[var(--radius-control)] border border-border px-2 text-xs leading-9 text-muted-foreground xl:flex"
-            title={workspaceLabel}
-          >
-            {workspaceLabel}
-          </div>
+          <AccountStatus />
         </div>
       </div>
     </header>

@@ -1,10 +1,13 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { LessonReader } from "@/components/lesson/lesson-reader";
 import { YoutubePlayer } from "@/components/lesson/youtube-player";
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
+import { LessonControls, isGeminiLesson } from "@/components/library/lesson-controls";
 import { TranscriptImportDialog } from "@/components/library/transcript-import-dialog";
 import { EmptyState } from "@/components/patterns/empty-state";
 import { ErrorState } from "@/components/patterns/error-state";
@@ -22,9 +25,9 @@ import {
 import { usePageTitle } from "@/components/shell/page-title";
 import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { resolveLibraryMode } from "@/lib/library/client";
-import { LibraryApiError } from "@/lib/library/types";
+import { LibraryApiError, type VideoRecord } from "@/lib/library/types";
 import { formatDuration } from "@/lib/library/coverage";
-import { useVideo } from "@/lib/library/query";
+import { libraryKeys, useVideo } from "@/lib/library/query";
 
 type VideoDetailProps = {
   videoId: string;
@@ -33,6 +36,13 @@ type VideoDetailProps = {
 export function VideoDetail({ videoId }: VideoDetailProps) {
   const mode = resolveLibraryMode();
   const query = useVideo(videoId);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const refreshLists = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [...libraryKeys.all, "videos"] }),
+      queryClient.invalidateQueries({ queryKey: libraryKeys.dashboard() }),
+    ]);
   const title = query.data ? displayLessonTitle(query.data.title) : null;
   usePageTitle(title);
 
@@ -70,6 +80,8 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const needsTranscript =
     video.status === "needs_transcript" || video.status === "metadata_only";
   const unavailable = video.status === "unavailable";
+  // A Gemini lesson already has its passages; it never offers a transcript upload.
+  const geminiLesson = isGeminiLesson(video);
 
   return (
     <>
@@ -79,7 +91,24 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SourceStatusBadge status={video.status} />
-            {video.transcript_access ? null : (
+            {geminiLesson ? (
+              <LessonControls
+                videoId={video.id}
+                title={title}
+                pinned={Boolean(video.pinned)}
+                onChanged={() => void refreshLists()}
+                onPinnedChange={(pinned) =>
+                  queryClient.setQueryData<VideoRecord>(libraryKeys.video(video.id), (prev) =>
+                    prev ? { ...prev, pinned } : prev,
+                  )
+                }
+                afterRemove={() => {
+                  queryClient.removeQueries({ queryKey: libraryKeys.video(video.id) });
+                  router.push("/videos");
+                }}
+              />
+            ) : null}
+            {video.transcript_access || geminiLesson ? null : (
               <TranscriptImportDialog
                 videoId={video.id}
                 videoTitle={title}
@@ -152,9 +181,11 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                   <span className="text-muted-foreground">YouTube ID</span>
                   <span className="font-mono text-xs">{video.youtube_video_id}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Owner-authorized caption download is not configured in this environment.
-                </p>
+                {geminiLesson ? null : (
+                  <p className="text-xs text-muted-foreground">
+                    Owner-authorized caption download is not configured in this environment.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </aside>

@@ -23,6 +23,8 @@ type LibraryToolbarProps = {
   query: string;
   onQueryChange: (query: string) => void;
   idPrefix?: string;
+  /** Videos page: pasted lessons never wait on a transcript, so the filter is hidden. */
+  hideNeedsTranscript?: boolean;
 };
 
 const STATUS_OPTIONS: { value: LibraryStatusFilter; label: string }[] = [
@@ -41,6 +43,7 @@ export function LibraryToolbar({
   query,
   onQueryChange,
   idPrefix = "library",
+  hideNeedsTranscript = false,
 }: LibraryToolbarProps) {
   const searchId = `${idPrefix}-search`;
   const statusId = `${idPrefix}-status`;
@@ -67,7 +70,9 @@ export function LibraryToolbar({
             value={status}
             onChange={(e) => onStatusChange(e.target.value as LibraryStatusFilter)}
           >
-            {STATUS_OPTIONS.map((opt) => (
+            {STATUS_OPTIONS.filter(
+              (opt) => !(hideNeedsTranscript && opt.value === "needs_transcript"),
+            ).map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

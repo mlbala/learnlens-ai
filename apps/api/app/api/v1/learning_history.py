@@ -15,6 +15,8 @@ from app.api.v1.schemas import (
     LessonListResponse,
     LessonSegmentOut,
     LessonSummaryOut,
+    PinLessonOut,
+    PinLessonRequest,
     SaveLessonRequest,
     VideoOut,
 )
@@ -67,6 +69,7 @@ def _video_out(video: Video) -> VideoOut:
         metadata_json=video.metadata_json,
         transcript_access=True,
         coverage="ready",
+        pinned=bool(video.pinned),
     )
 
 
@@ -103,6 +106,7 @@ def _summary(video: Video, segments: list[TranscriptSegment]) -> LessonSummaryOu
         summary=summary,
         key_points=points,
         transcript_access=True,
+        pinned=bool(video.pinned),
         segment_ids=[row.id for row in segments],
     )
 
@@ -193,6 +197,42 @@ async def open_learning_history_lesson(
     except LessonHistoryError as exc:
         _fail(exc, request_id)
     return _detail(video, segments)
+
+
+@router.delete("/{video_id}", status_code=204)
+async def delete_learning_history_lesson(
+    video_id: uuid.UUID,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+) -> None:
+    request_id = getattr(request.state, "request_id", None)
+    service = _service(db, request)
+    try:
+        await service.remove_lesson(workspace_id=ctx.workspace.id, video_id=video_id)
+    except LessonHistoryError as exc:
+        _fail(exc, request_id)
+
+
+@router.put("/{video_id}/pin", response_model=PinLessonOut)
+async def pin_learning_history_lesson(
+    video_id: uuid.UUID,
+    body: PinLessonRequest,
+    request: Request,
+    ctx: CsrfAuth,
+    db: DbSession,
+) -> PinLessonOut:
+    request_id = getattr(request.state, "request_id", None)
+    service = _service(db, request)
+    try:
+        video = await service.set_pinned(
+            workspace_id=ctx.workspace.id,
+            video_id=video_id,
+            pinned=body.pinned,
+        )
+    except LessonHistoryError as exc:
+        _fail(exc, request_id)
+    return PinLessonOut(video_id=video.id, pinned=bool(video.pinned))
 
 
 @settings_router.get("/learning-history", response_model=LearningHistorySettingsOut)

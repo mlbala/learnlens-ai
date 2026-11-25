@@ -95,6 +95,7 @@ type SavedLessonSummary = {
   source_url?: string | null;
   summary?: string;
   key_points?: string[];
+  pinned?: boolean;
 };
 
 type SavedLessonDetail = {
@@ -118,6 +119,7 @@ function summaryToVideo(item: SavedLessonSummary): VideoRecord {
     transcript_access: true,
     coverage: "ready",
     fixture_data: false,
+    pinned: Boolean(item.pinned),
     metadata_json: {
       fixture_data: false,
       gemini_lesson: {
@@ -263,7 +265,9 @@ export class FixtureLibraryClient implements LibraryClient {
     if (!this.seedDemo) {
       await this.refreshSavedLessons();
     }
-    return fixtureDashboardStats(this.videos);
+    const stats = fixtureDashboardStats(this.videos);
+    if (!this.seedDemo) return { ...stats, playlists: 0 };
+    return stats;
   }
 
   async listVideos(params?: ListParams): Promise<LibraryListPage<VideoRecord>> {

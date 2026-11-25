@@ -1,10 +1,13 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
 import { ImportSourceDialog } from "@/components/library/import-source-dialog";
+import { LessonControls, isGeminiLesson } from "@/components/library/lesson-controls";
 import {
   LibraryToolbar,
   type LibraryStatusFilter,
@@ -27,7 +30,7 @@ import {
 import { displayLessonTitle, lessonSubtitle } from "@/lib/lesson/title";
 import { resolveLibraryMode } from "@/lib/library/client";
 import { formatDuration } from "@/lib/library/coverage";
-import { usePlaylistsInfinite, useVideosInfinite } from "@/lib/library/query";
+import { libraryKeys, usePlaylistsInfinite, useVideosInfinite } from "@/lib/library/query";
 import { cn } from "@/lib/utils";
 
 type LibraryBrowserProps = {
@@ -44,8 +47,22 @@ export function LibraryBrowser({
   const mode = resolveLibraryMode();
   const [view, setView] = useState<LibraryViewMode>("grid");
   const [status, setStatus] = useState<LibraryStatusFilter>("all");
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams?.get("q") ?? "";
+  // Header search writes ?q= onto /videos; it is the same title filter as the toolbar.
+  const [query, setQuery] = useState(urlQuery);
   const [kind, setKind] = useState<"all" | "videos" | "playlists">(initialKind);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setQuery(urlQuery);
+  }, [urlQuery]);
+
+  const refreshLessons = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [...libraryKeys.all, "videos"] }),
+      queryClient.invalidateQueries({ queryKey: libraryKeys.dashboard() }),
+    ]);
 
   const videoQuery = useVideosInfinite({
     status: status === "all" ? undefined : status,
@@ -108,6 +125,7 @@ export function LibraryBrowser({
         onStatusChange={setStatus}
         query={query}
         onQueryChange={setQuery}
+        hideNeedsTranscript={initialKind === "videos"}
       />
 
       {loading ? <PageSkeleton /> : null}
@@ -151,38 +169,51 @@ export function LibraryBrowser({
                       : "flex flex-col gap-2",
                   )}
                 >
-                  {videos.map((video) => (
-                    <li key={video.id}>
-                      <Link
-                        href={`/videos/${video.id}`}
+                  {videos.map((video) => {
+                    const lessonTitle = displayLessonTitle(video.title);
+                    const subtitle = lessonSubtitle({
+                      channel: video.channel_title,
+                      duration: formatDuration(video.duration_seconds),
+                      extra: video.fixture_data ? "Fixture data" : null,
+                    });
+                    return (
+                      <li
+                        key={video.id}
                         className={cn(
-                          "block rounded-[var(--radius-card)] border border-border bg-surface transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          view === "list" ? "px-4 py-3" : "p-4",
+                          "flex rounded-[var(--radius-card)] border border-border bg-surface transition-colors hover:bg-surface-muted",
+                          view === "list"
+                            ? "items-center gap-3 px-4 py-3"
+                            : "flex-col gap-3 p-4",
                         )}
-                        aria-label={`Open ${displayLessonTitle(video.title)}`}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-foreground">{displayLessonTitle(video.title)}</p>
-                            {lessonSubtitle({
-                              channel: video.channel_title,
-                              duration: formatDuration(video.duration_seconds),
-                              extra: video.fixture_data ? "Fixture data" : null,
-                            }) ? (
-                              <p className="mt-1 truncate text-xs text-muted-foreground">
-                                {lessonSubtitle({
-                                  channel: video.channel_title,
-                                  duration: formatDuration(video.duration_seconds),
-                                  extra: video.fixture_data ? "Fixture data" : null,
-                                })}
-                              </p>
-                            ) : null}
+                        <Link
+                          href={`/videos/${video.id}`}
+                          className="block min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={`Open ${lessonTitle}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">{lessonTitle}</p>
+                              {subtitle ? (
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {subtitle}
+                                </p>
+                              ) : null}
+                            </div>
+                            <SourceStatusBadge status={video.status} />
                           </div>
-                          <SourceStatusBadge status={video.status} />
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
+                        </Link>
+                        {isGeminiLesson(video) ? (
+                          <LessonControls
+                            videoId={video.id}
+                            title={lessonTitle}
+                            pinned={Boolean(video.pinned)}
+                            onChanged={() => void refreshLessons()}
+                          />
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {videoQuery.hasNextPage ? (
