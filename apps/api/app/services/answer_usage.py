@@ -14,8 +14,10 @@ def answer_usage_line(
     decision: str,
     review_status: str,
     external_search_enabled: bool,
+    review_reasons: tuple[str, ...] | list[str] = (),
     kept_video_passages: int,
     kept_outside_passages: int,
+    dropped_off_subject: int = 0,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     transcript: str = "",
@@ -33,9 +35,12 @@ def answer_usage_line(
         "thread_id": str(thread_id),
         "decision": decision,
         "review_status": review_status,
+        # Reviewer reason codes only (e.g. origin_mix). Never the draft or passages.
+        "review_reasons": [str(code) for code in review_reasons],
         "external_search_enabled": bool(external_search_enabled),
         "kept_video_passages": int(kept_video_passages),
         "kept_outside_passages": int(kept_outside_passages),
+        "dropped_off_subject": int(dropped_off_subject),
     }
     if input_tokens is not None:
         record["input_tokens"] = int(input_tokens)

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.contracts import TextModel
 from app.ai.factory import build_embedding_model, build_text_model
 from app.core.settings import Settings
 from app.db.models import ExternalEvidence, TranscriptSegment, Video
@@ -29,6 +30,7 @@ from app.retrieval.session_lanes import (
     stable_point_id,
     stored_timing,
 )
+from app.retrieval.subject_gate import ModelSubjectGate, SubjectGate, gate_by_subject
 from app.retrieval.thresholds import VIDEO_COVERAGE_THRESHOLD
 from app.services.lesson_history import passage_hash
 
@@ -70,6 +72,8 @@ class EvidencePacket:
     kept: tuple[dict[str, str], ...]
     sources: tuple[dict[str, str], ...]
     prompt_block: str
+    # Outside passages the subject gate dropped as a different subject from the video.
+    external_off_subject: int = 0
 
     def public_passages(self) -> list[dict[str, str]]:
         return [
@@ -91,10 +95,12 @@ class SessionEvidenceService:
         session: AsyncSession,
         settings: Settings,
         reranker: SessionReranker | None = None,
+        subject_gate: SubjectGate | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._reranker = reranker
+        self._subject_gate = subject_gate
 
     async def store_hits(
         self,
@@ -152,6 +158,7 @@ class SessionEvidenceService:
         question: str,
         external_search: bool,
         watch_url: str,
+        subject: str = "",
     ) -> EvidencePacket:
         segments = await self._segments(workspace_id, video_id, thread_id)
         external_rows = (
@@ -188,6 +195,7 @@ class SessionEvidenceService:
         )
         video_best = best_score(video_scored)
         external_kept: list[LanePassage] = []
+        off_subject = 0
         if external_search:
             external_passages = await self._search_lane(
                 workspace_id=workspace_id,
@@ -205,6 +213,13 @@ class SessionEvidenceService:
                 text_model=text_model,
                 reranker=self._reranker,
             )
+            # Ranking judged the question only; drop results on a different subject.
+            external_kept, off_subject = await gate_by_subject(
+                external_kept,
+                subject=subject,
+                question=question,
+                gate=self._resolve_subject_gate(text_model),
+            )
         decision = decide(
             external_search=external_search,
             best_video_score=video_best,
@@ -221,7 +236,16 @@ class SessionEvidenceService:
             kept=tuple(kept_refs(list(passages))),
             sources=tuple(_sources(send_external)),
             prompt_block=evidence_block(list(passages)),
+            external_off_subject=off_subject,
         )
+
+    def _resolve_subject_gate(self, text_model: TextModel | None) -> SubjectGate | None:
+        """Injected gate first. An injected reranker owns lane scoring, so no gate then."""
+        if self._subject_gate is not None:
+            return self._subject_gate
+        if self._reranker is not None or text_model is None:
+            return None
+        return ModelSubjectGate(text_model)
 
     async def _search_lane(
         self,

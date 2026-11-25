@@ -29,6 +29,7 @@ from app.retrieval.session_lanes import (
     ORIGIN_VIDEO,
     SessionReranker,
 )
+from app.retrieval.subject_gate import SubjectGate, lesson_subject
 from app.services.answer_usage import answer_usage_line
 from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
 from app.services.session_judge import SessionJudge, build_judge_request, select_judge
@@ -192,16 +193,19 @@ class SessionChatService:
         reranker: SessionReranker | None = None,
         reviewer: SessionReviewer | None = None,
         judge: SessionJudge | None = None,
+        subject_gate: SubjectGate | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._text_model = text_model
         self._reranker = reranker
+        self._subject_gate = subject_gate
         self._reviewer = reviewer
         self._session_judge = judge
         self._threads = ChatThreadRepository(session)
         self._messages = ChatMessageRepository(session)
         self._turn_input_tokens: int | None = None
+        self._turn_review_reasons: list[str] = []
         self._turn_output_tokens: int | None = None
 
     async def get_thread(
@@ -281,6 +285,7 @@ class SessionChatService:
             raise SessionChatError(422, "INVALID_QUESTION", "A question is required.")
         self._turn_input_tokens = None
         self._turn_output_tokens = None
+        self._turn_review_reasons = []
         await self._require_video(workspace_id, video_id)
         thread = await self._ensure_thread(
             workspace_id=workspace_id,
@@ -331,10 +336,17 @@ class SessionChatService:
         except ProviderTemporarilyUnavailable:
             raise SessionChatError(503, "GEMINI_BUSY", "Gemini is busy.") from None
         structured["decision"] = packet.decision
+        # Whether the kept video passages cover the question. The UI uses it to label
+        # web results as "partly covered" or "not covered in the video".
+        structured["video_covered"] = bool(packet.video_covered)
         structured["kept"] = list(packet.kept)
         structured["review_status"] = review_status
         structured["outside_lane_empty"] = bool(
             external_search and packet.decision == "lesson_only"
+        )
+        # Search found results, but every one was about a different subject than the video.
+        structured["outside_off_subject"] = bool(
+            external_search and packet.decision != "blend" and packet.external_off_subject > 0
         )
         search_plan = _web_search_plan(answer)
         if search_plan is not None and external_search:
@@ -399,8 +411,10 @@ class SessionChatService:
                 decision=str(packet.decision),
                 review_status=review_status,
                 external_search_enabled=external_search,
+                review_reasons=tuple(self._turn_review_reasons),
                 kept_video_passages=video_kept,
                 kept_outside_passages=outside_kept,
+                dropped_off_subject=packet.external_off_subject,
                 input_tokens=self._turn_input_tokens,
                 output_tokens=self._turn_output_tokens,
                 transcript="\n".join(
@@ -464,6 +478,7 @@ class SessionChatService:
             question=cleaned,
             external_search=external_search,
             watch_url=video.source_url or "",
+            subject=lesson_subject(video),
         )
         return thread, packet
 
@@ -484,10 +499,16 @@ class SessionChatService:
             question=question,
             external_search=external_search,
             watch_url=video.source_url or "",
+            subject=lesson_subject(video),
         )
 
     def _evidence_service(self) -> SessionEvidenceService:
-        return SessionEvidenceService(self._session, self._settings, reranker=self._reranker)
+        return SessionEvidenceService(
+            self._session,
+            self._settings,
+            reranker=self._reranker,
+            subject_gate=self._subject_gate,
+        )
 
     async def _draft_from_model(
         self,
@@ -570,12 +591,23 @@ class SessionChatService:
         try:
             model_verdict = await self._active_reviewer().review(request)
         except ReviewUnavailable:
+            self._note_review_reasons(("unavailable",))
             raise
         except Exception as exc:
             if is_review_timeout(exc):
+                self._note_review_reasons(("timeout",))
                 raise ReviewUnavailable("Reviewer timed out.") from exc
             raise
-        return merge_verdict(model_verdict, deterministic_reasons(request))
+        verdict = merge_verdict(model_verdict, deterministic_reasons(request))
+        if not verdict.accept:
+            self._note_review_reasons(verdict.reasons or ("rejected",))
+        return verdict
+
+    def _note_review_reasons(self, codes: tuple[str, ...]) -> None:
+        """Keep the codes for the answer log so a withheld turn can be explained."""
+        for code in codes:
+            if code not in self._turn_review_reasons:
+                self._turn_review_reasons.append(code)
 
     async def _record_judge_score(
         self,
