@@ -410,6 +410,9 @@ function TutorAvatar() {
   );
 }
 
+export const OFF_SUBJECT_NOTE =
+  "Web results were about a different subject than this video, so none are shown.";
+
 function ChatBubble({
   message,
   youtubeVideoId,
@@ -424,8 +427,10 @@ function ChatBubble({
   const isUser = message.role === "user";
   const withheld = message.content_json?.review_status === "withheld";
   const searchRejected = message.content_json?.web_search?.accepted === false;
+  const offSubject = !searchRejected && message.content_json?.outside_off_subject === true;
   const outsideEmpty =
     !searchRejected &&
+    !offSubject &&
     message.content_json?.outside_lane_empty === true &&
     (message.content_json.lesson?.length ?? 0) > 0;
   const modeLabel =
@@ -481,6 +486,11 @@ function ChatBubble({
                 </Button>
               ) : null}
             </AlertDescription>
+          </Alert>
+        ) : null}
+        {offSubject ? (
+          <Alert>
+            <AlertDescription>{OFF_SUBJECT_NOTE}</AlertDescription>
           </Alert>
         ) : null}
         {outsideEmpty ? (

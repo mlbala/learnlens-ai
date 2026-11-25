@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, FileClock, ListVideo, LoaderCircle, ChevronRight } from "lucide-react";
+import { CircleCheck, ListVideo, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { FixtureModeBanner } from "@/components/library/fixture-mode-banner";
@@ -30,9 +30,6 @@ export function DashboardHome() {
 
   const stats = statsQuery.data;
   const recent = recentQuery.data?.pages[0]?.items.slice(0, 4) ?? [];
-  const attention = recent.filter((v) =>
-    ["failed_retryable", "failed", "failed_terminal", "needs_transcript"].includes(v.status),
-  );
 
   return (
     <>
@@ -63,18 +60,11 @@ export function DashboardHome() {
       {stats ? (
         <section
           aria-label="Workspace overview"
-          className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          className="mb-8 grid gap-4 sm:grid-cols-2"
         >
           {[
-            { label: "Videos ready", value: stats.videos_ready, Icon: CircleCheck, tone: "text-success bg-success/10" },
+            { label: "Lessons saved", value: stats.videos_ready, Icon: CircleCheck, tone: "text-success bg-success/10" },
             { label: "Playlists", value: stats.playlists, Icon: ListVideo, tone: "text-primary bg-primary/10" },
-            { label: "Processing", value: stats.processing, Icon: LoaderCircle, tone: "text-accent bg-accent/10" },
-            {
-              label: "Pending transcripts",
-              value: stats.pending_transcripts,
-              Icon: FileClock,
-              tone: "text-warning bg-warning/10",
-            },
           ].map(({ label, value, Icon, tone }) => (
             <Card key={label} className="hover:shadow-[var(--shadow-md)]">
               <CardHeader className="flex-row items-center gap-4 space-y-0">
@@ -91,7 +81,7 @@ export function DashboardHome() {
         </section>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6">
         <section aria-labelledby="continue-heading" className="space-y-3">
           <h2 id="continue-heading" className="text-lg font-semibold">
             Continue learning
@@ -124,31 +114,6 @@ export function DashboardHome() {
           )}
         </section>
 
-        <section aria-labelledby="attention-heading" className="space-y-3">
-          <h2 id="attention-heading" className="text-lg font-semibold">
-            Jobs needing attention
-          </h2>
-          {attention.length === 0 ? (
-            <EmptyState
-              title="Nothing waiting"
-              description="Failed or transcript-needed items will appear here."
-            />
-          ) : (
-            <ul className="space-y-2">
-              {attention.map((video) => (
-                <li key={video.id}>
-                  <Link
-                    href={`/videos/${video.id}`}
-                    className="group flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-card)] border border-border bg-surface px-4 py-3 text-sm shadow-[var(--shadow-sm)] transition-all hover:-translate-y-px hover:border-primary/30 hover:shadow-[var(--shadow-md)]"
-                  >
-                    <span className="min-w-0 truncate font-medium">{displayLessonTitle(video.title)}</span>
-                    <SourceStatusBadge status={video.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
 
       <section aria-labelledby="recent-heading" className="mt-8 space-y-3">

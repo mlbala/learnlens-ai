@@ -25,6 +25,10 @@ function parseCookieHeader(header: string | null): CookieJar {
   return jar;
 }
 
+export function cookieJarFromHeader(header: string | null): CookieJar {
+  return parseCookieHeader(header);
+}
+
 function serializeJar(jar: CookieJar): string {
   return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
 }
@@ -61,7 +65,13 @@ async function authCall(
   return { ok: response.ok, jar, setCookies };
 }
 
-async function ensureWorkspace(jar: CookieJar): Promise<string[]> {
+export async function ensureWorkspace(jar: CookieJar): Promise<string[]> {
+  if (jar.get("ll_signed_out") === "1") {
+    jar.delete("ll_access");
+    jar.delete("ll_refresh");
+    jar.delete("ll_csrf");
+    return [];
+  }
   if (jar.has("ll_access") && jar.has("ll_csrf")) return [];
   if (process.env.NODE_ENV === "production" && !process.env.WEB_WORKSPACE_PASSWORD) return [];
 
@@ -161,11 +171,17 @@ export async function proxyLearningApi(
     );
   }
 
-  const payload = await upstream.json().catch(() => null);
-  const response = NextResponse.json(
-    payload ?? { error: { code: "UPSTREAM", message: "Lesson history is unavailable." } },
-    { status: upstream.status },
-  );
+  let response: NextResponse;
+  if (upstream.status === 204) {
+    // A null-body status cannot carry JSON. Remove returns 204.
+    response = new NextResponse(null, { status: 204 });
+  } else {
+    const payload = await upstream.json().catch(() => null);
+    response = NextResponse.json(
+      payload ?? { error: { code: "UPSTREAM", message: "Lesson history is unavailable." } },
+      { status: upstream.status },
+    );
+  }
   const upstreamCookies =
     typeof upstream.headers.getSetCookie === "function" ? upstream.headers.getSetCookie() : [];
   for (const cookie of [...setCookies, ...upstreamCookies]) {

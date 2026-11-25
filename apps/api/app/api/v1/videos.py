@@ -58,6 +58,7 @@ def _video_out(video: Any) -> VideoOut:
         metadata_json=video.metadata_json,
         transcript_access=transcript_access,
         coverage=coverage if isinstance(coverage, str) else None,
+        pinned=bool(video.pinned),
     )
 
 

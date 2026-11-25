@@ -75,6 +75,8 @@ export function LessonReader({ video, className }: LessonReaderProps) {
 
   const bundle = bundleQuery.data;
   const chapters = bundle?.chapters ?? [];
+  // Chapters appear only when the source supplied them. None are generated here.
+  const hasChapters = chapters.length > 0;
   const summaries = bundle?.summaries ?? [];
   const snippets = bundle?.snippets ?? [];
   const starters = bundle?.starter_questions ?? [];
@@ -133,15 +135,15 @@ export function LessonReader({ video, className }: LessonReaderProps) {
                 <FileText className="h-4 w-4" aria-hidden />
                 Study notes
               </TabsTrigger>
-              <TabsTrigger value="chapters" className={outerTrigger}>
-                <ListOrdered className="h-4 w-4" aria-hidden />
-                Chapters
-                {chapters.length > 0 ? (
+              {hasChapters ? (
+                <TabsTrigger value="chapters" className={outerTrigger}>
+                  <ListOrdered className="h-4 w-4" aria-hidden />
+                  Chapters
                   <span className="rounded-full bg-surface-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">
                     {chapters.length}
                   </span>
-                ) : null}
-              </TabsTrigger>
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="transcript" className={outerTrigger}>
                 <ScrollText className="h-4 w-4" aria-hidden />
                 Transcript
@@ -153,12 +155,14 @@ export function LessonReader({ video, className }: LessonReaderProps) {
               </h2>
               <SummaryPanel summaries={summaries} onAskAbout={askAbout} />
             </TabsContent>
-            <TabsContent value="chapters" className="mt-5">
-              <h2 id="lesson-chapters-heading" className="sr-only">
-                Chapters
-              </h2>
-              <ChapterTimeline chapters={chapters} onSeek={requestSeek} />
-            </TabsContent>
+            {hasChapters ? (
+              <TabsContent value="chapters" className="mt-5">
+                <h2 id="lesson-chapters-heading" className="sr-only">
+                  Chapters
+                </h2>
+                <ChapterTimeline chapters={chapters} onSeek={requestSeek} />
+              </TabsContent>
+            ) : null}
             <TabsContent value="transcript" className="mt-5">
               <h2 id="lesson-transcript-heading" className="sr-only">
                 Transcript

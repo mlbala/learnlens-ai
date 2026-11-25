@@ -105,6 +105,7 @@ def test_usage_line_has_counts_not_transcript_or_snippet() -> None:
         source_url=url,
     )
     record = json.loads(line)
+    assert record["review_reasons"] == []
     assert record["kept_video_passages"] == 2
     assert record["kept_outside_passages"] == 1
     assert record["input_tokens"] == 11

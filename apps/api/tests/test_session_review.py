@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import anyio
@@ -75,6 +76,90 @@ def test_reviewer_payload_drops_external_origin_when_checkbox_is_off() -> None:
 def test_paper_used_as_the_video_is_origin_mix() -> None:
     request = _blend_request(_lesson(PAPER))
     assert "origin_mix" in deterministic_reasons(request)
+
+
+def _search_on_request(
+    *, video: str, paper: str, lesson: str, question: str = "q"
+) -> ReviewRequest:
+    return build_review_request(
+        question=question,
+        decision="blend",
+        external_search=True,
+        draft={
+            "lesson": [{"heading": "Answer", "body": lesson}],
+            "external": [{"heading": "Papers", "body": "Researchers describe this too."}],
+            "sources": [
+                {"title": "Paper", "url": PAPER_URL, "kind": "paper", "provider": "openalex"}
+            ],
+        },
+        passages=[
+            _passage(ORIGIN_VIDEO, video),
+            _passage(ORIGIN_EXTERNAL, paper, source_url=PAPER_URL),
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    ("video", "paper", "lesson"),
+    [
+        (
+            "Leaves capture sunlight using chlorophyll, and that energy turns water and "
+            "carbon dioxide into glucose. Oxygen is released as a by-product.",
+            "Photosynthesis is the process by which plants convert light energy into "
+            "chemical energy stored in glucose.",
+            "Photosynthesis is the process by which plants use sunlight, captured by "
+            "chlorophyll, to turn water and carbon dioxide into glucose.",
+        ),
+        (
+            "Each connection has a weight, and training adjusts those weights to reduce "
+            "the error.",
+            "Backpropagation computes the gradient of the loss with respect to the weights "
+            "of the network, which gradient descent then uses.",
+            "During training, the model adjusts the weights of the network to reduce the "
+            "error on each example.",
+        ),
+    ],
+)
+def test_shared_topic_wording_with_a_paper_is_not_origin_mix(
+    video: str, paper: str, lesson: str
+) -> None:
+    """Search-on regression: common phrasing shared with a paper used to withhold every answer."""
+    request = _search_on_request(video=video, paper=paper, lesson=lesson)
+    assert deterministic_reasons(request) == ()
+
+
+def test_a_copied_paper_finding_is_still_origin_mix() -> None:
+    request = _search_on_request(
+        video="Supply and demand set the price.",
+        paper="A 2019 study of 40 markets found that prices rose 12 percent within six "
+        "months after a supply shock in coastal regions.",
+        lesson="Prices rose 12 percent, within six months, after a supply shock in coastal "
+        "regions.",
+    )
+    # Punctuation differences do not hide a copied run of words.
+    assert "origin_mix" in deterministic_reasons(request)
+
+
+def test_wording_the_video_or_question_also_uses_is_not_origin_mix() -> None:
+    paper = "Mitochondria generate most of the cell's supply of adenosine triphosphate."
+    in_video = _search_on_request(
+        video="Mitochondria generate most of the cell's supply of adenosine triphosphate.",
+        paper=paper,
+        lesson="Mitochondria generate most of the cell's supply of adenosine triphosphate.",
+    )
+    assert deterministic_reasons(in_video) == ()
+    in_question = _search_on_request(
+        video="Mitochondria are the powerhouse of the cell.",
+        paper=paper,
+        lesson="You asked whether mitochondria generate most of the cell's supply of energy.",
+        question="Do mitochondria generate most of the cell's supply of energy?",
+    )
+    assert deterministic_reasons(in_question) == ()
+
+
+def test_review_instructions_separate_shared_topic_from_origin_mix() -> None:
+    assert "Sharing the topic, key terms, or common wording" in REVIEW_INSTRUCTIONS
+    assert "found only in an external_search passage" in REVIEW_INSTRUCTIONS
 
 
 def test_external_panel_when_search_is_off_is_origin_mix() -> None:
@@ -218,6 +303,34 @@ def test_second_rejection_withholds_the_draft(client: TestClient) -> None:
     assert len(reviewer.requests) == 2
 
 
+def test_withheld_turn_logs_reason_codes_only(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    reviewer = _ScriptedReviewer(
+        [ReviewVerdict(False, ("origin_mix",)), ReviewVerdict(False, ("off_lesson",))]
+    )
+    client.app.state.session_reviewer = reviewer
+    _register(client, "review-log-reasons@example.com")
+    saved = _save(client, GLUCOSE)
+    draft = "UNIQUE_DRAFT_TEXT about glucose."
+    with caplog.at_level("INFO", logger="app.services.session_chat"):
+        created = _post(
+            client,
+            saved["video"]["id"],
+            "How does photosynthesis make glucose?",
+            external_search=False,
+            answer=_lesson(draft),
+        )
+    assert created["assistant_message"]["content_json"]["review_status"] == "withheld"
+    messages = [record.getMessage() for record in caplog.records]
+    lines = [message for message in messages if "answer_usage" in message]
+    assert lines, "answer_usage line was not logged"
+    record = json.loads(lines[-1])
+    assert record["review_status"] == "withheld"
+    assert record["review_reasons"] == ["origin_mix", "off_lesson"]
+    assert "UNIQUE_DRAFT_TEXT" not in lines[-1]
+
+
 def test_reviewer_timeout_withholds_without_showing_the_draft(client: TestClient) -> None:
     reviewer = _ScriptedReviewer([TimeoutError("reviewer timed out")])
     client.app.state.session_reviewer = reviewer
@@ -257,6 +370,86 @@ def test_paper_in_the_lesson_is_regenerated_or_withheld(client: TestClient) -> N
     assert stored["review_status"] in {"regenerated", "withheld"}
     assert PAPER not in created["assistant_message"]["content"]
     assert "reasons" not in stored
+
+
+class _VideoMissesReranker:
+    """The video lane does not cover the question; the outside lane does."""
+
+    async def rerank(
+        self,
+        *,
+        question: str,
+        passages: list[LanePassage],
+    ) -> list[tuple[uuid.UUID, float]]:
+        del question
+        return [
+            (passage.id, 0.95 if passage.evidence_origin == ORIGIN_EXTERNAL else 0.0)
+            for passage in passages
+        ]
+
+
+def _web_answer(lesson_body: str) -> dict:
+    return {
+        "lesson": [{"heading": "Answer", "body": lesson_body}],
+        "external": [{"heading": "From the survey", "body": "Radio surveys catalogue quasars."}],
+        "sources": [
+            {
+                "title": "Quasar survey",
+                "url": PAPER_URL,
+                "kind": "paper",
+                "provider": "semantic_scholar",
+            }
+        ],
+    }
+
+
+def test_related_web_results_show_when_the_video_does_not_cover_the_question(
+    client: TestClient,
+) -> None:
+    client.app.state.session_reviewer = _ScriptedReviewer([ReviewVerdict(True, ())])
+    client.app.state.session_reranker = _VideoMissesReranker()
+    _register(client, "web-not-covered@example.com")
+    saved = _save(client, GLUCOSE)
+    video_id = saved["video"]["id"]
+    question = "How do radio surveys find quasars?"
+    _retrieve(client, video_id, question)
+    created = _post(
+        client,
+        video_id,
+        question,
+        external_search=True,
+        answer=_web_answer("The video does not cover this question."),
+    )
+    stored = created["assistant_message"]["content_json"]
+    assert stored["decision"] == "blend"
+    assert stored["video_covered"] is False
+    assert stored["review_status"] == "accepted"
+    assert stored["lesson"][0]["body"] == "The video does not cover this question."
+    assert stored["external"][0]["body"] == "Radio surveys catalogue quasars."
+    assert stored["sources"][0]["url"] == PAPER_URL
+
+
+def test_web_results_add_detail_when_the_video_covers_part_of_the_question(
+    client: TestClient,
+) -> None:
+    client.app.state.session_reviewer = _ScriptedReviewer([ReviewVerdict(True, ())])
+    client.app.state.session_reranker = _KeepReranker()
+    _register(client, "web-partly-covered@example.com")
+    saved = _save(client, GLUCOSE)
+    video_id = saved["video"]["id"]
+    question = "How does photosynthesis make glucose?"
+    _retrieve(client, video_id, question)
+    created = _post(
+        client,
+        video_id,
+        question,
+        external_search=True,
+        answer=_web_answer("Photosynthesis converts sunlight into glucose in leaves."),
+    )
+    stored = created["assistant_message"]["content_json"]
+    assert stored["decision"] == "blend"
+    assert stored["video_covered"] is True
+    assert stored["external"]
 
 
 def test_invented_url_and_timestamp_are_not_stored(client: TestClient) -> None:

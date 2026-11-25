@@ -65,7 +65,8 @@ export function LearningHistorySetting() {
         <Label htmlFor="learning-history-limit">Lessons to keep</Label>
         <p className="text-sm text-muted-foreground">
           My Library and Recent Learning share this list. The default is 10. Saving a smaller
-          number drops the oldest lessons immediately.
+          number drops the oldest lessons immediately. Pinned lessons are kept when the limit
+          drops the oldest.
         </p>
         <Input
           id="learning-history-limit"

@@ -32,6 +32,7 @@ export type VideoRecord = {
   transcript_access: boolean;
   coverage?: string | null;
   fixture_data?: boolean;
+  pinned?: boolean;
   metadata_json?: Record<string, unknown> | null;
 };
 

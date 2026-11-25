@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ChatPanel } from "@/components/lesson/chat-panel";
+import { ChatPanel, OFF_SUBJECT_NOTE } from "@/components/lesson/chat-panel";
 import { asTutorAnswer } from "@/lib/lesson/answer";
 import { resetLessonClient, type LessonClient } from "@/lib/lesson/client";
 import type { ChatMessage, ChatThread, LessonBundle, PostChatResult } from "@/lib/lesson/types";
@@ -138,6 +138,37 @@ describe("ChatPanel", () => {
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
   });
 
+  it("says web results were off-subject instead of the generic empty note", async () => {
+    const answer = asTutorAnswer({
+      v: 1,
+      lesson: [{ heading: "From the video", body: "Windings set the voltage ratio." }],
+      external: [],
+      sources: [],
+      decision: "lesson_only",
+      outside_lane_empty: true,
+      outside_off_subject: true,
+    });
+    const user = messages[0];
+    const assistant = messages[1];
+    if (!user || !assistant || !answer) throw new Error("fixture");
+    expect(answer.outside_off_subject).toBe(true);
+    resetLessonClient(
+      new StoredClient([
+        { ...user, content: "What is a transformer?" },
+        { ...assistant, content: "Windings set the voltage ratio.", content_json: answer },
+      ]),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ChatPanel videoId="video-1" transcriptAccess starterQuestions={[]} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(OFF_SUBJECT_NOTE)).toBeInTheDocument();
+    expect(screen.queryByText("Search is on, and no outside source was kept.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/From web search/)).not.toBeInTheDocument();
+  });
+
   it("renders an empty outside search beside the video answer", async () => {
     const answer = asTutorAnswer({
       v: 1,
@@ -171,6 +202,6 @@ describe("ChatPanel", () => {
     expect(screen.getByText("Search is on, and no outside source was kept.")).toBeInTheDocument();
     expect(screen.getByText("Searched academic papers and official documents.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    expect(screen.queryByText("From papers and official docs")).not.toBeInTheDocument();
+    expect(screen.queryByText(/From web search/)).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,20 @@ import {
   type TutorAnswer,
 } from "@/lib/lesson/answer";
 
+export const WEB_LABEL = "From web search · not from the video";
+export const WEB_NOTE_NOT_COVERED =
+  "Not covered in this video. These web results answer your question on a related topic, so you can go further. They are not from the video.";
+export const WEB_NOTE_PARTLY_COVERED =
+  "The video covers part of this. These web results add more detail. They are not from the video.";
+export const WEB_NOTE_UNKNOWN = "These web results are not from the video.";
+
+/** Small note above the web panel: how far the video covers the question. */
+export function webCoverageNote(videoCovered: boolean | undefined): string {
+  if (videoCovered === false) return WEB_NOTE_NOT_COVERED;
+  if (videoCovered === true) return WEB_NOTE_PARTLY_COVERED;
+  return WEB_NOTE_UNKNOWN;
+}
+
 const KIND_LABEL = {
   paper: "Paper",
   official: "Official docs",
@@ -34,7 +48,12 @@ export function AnswerView({
         <AnswerBlock label="From the lesson" sections={answer.lesson} tone="lesson" />
       ) : null}
       {answer.external.length > 0 ? (
-        <AnswerBlock label="From papers and official docs" sections={answer.external} tone="external" />
+        <AnswerBlock
+          label={WEB_LABEL}
+          note={webCoverageNote(answer.video_covered)}
+          sections={answer.external}
+          tone="external"
+        />
       ) : null}
       {answer.sources.length > 0 ? <SourceList sources={answer.sources} /> : null}
       <SearchCheck answer={answer} />
@@ -83,10 +102,12 @@ function SearchCheck({ answer }: { answer: TutorAnswer }) {
 
 function AnswerBlock({
   label,
+  note,
   sections,
   tone,
 }: {
   label: string;
+  note?: string;
   sections: AnswerSection[];
   tone: "lesson" | "external";
 }) {
@@ -103,6 +124,14 @@ function AnswerBlock({
         <Icon className="h-3.5 w-3.5" aria-hidden />
         <p className="text-xs font-semibold uppercase tracking-wide">{label}</p>
       </header>
+      {note ? (
+        <p
+          className="border-b border-border bg-surface-muted/50 px-4 py-2 text-xs leading-5 text-muted-foreground"
+          data-testid="web-coverage-note"
+        >
+          {note}
+        </p>
+      ) : null}
       <div className="space-y-4 px-4 py-3">
         {sections.map((section) => (
           <div key={section.heading} className="space-y-1">

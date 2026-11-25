@@ -30,6 +30,10 @@ export type TutorAnswer = {
   review_status?: ReviewStatus;
   decision?: "lesson_only" | "blend" | "abstain";
   outside_lane_empty?: boolean;
+  /** Search found results, but all were about a different subject than the video. */
+  outside_off_subject?: boolean;
+  /** Whether the kept video passages cover the question. Absent on older answers. */
+  video_covered?: boolean;
   web_search?: WebSearchPlan;
 };
 
@@ -84,6 +88,10 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
   const outside_lane_empty =
     (data as { outside_lane_empty?: unknown }).outside_lane_empty === true;
   const web_search = asWebSearch((data as { web_search?: unknown }).web_search);
+  const outside_off_subject =
+    (data as { outside_off_subject?: unknown }).outside_off_subject === true;
+  const coveredRaw = (data as { video_covered?: unknown }).video_covered;
+  const video_covered = typeof coveredRaw === "boolean" ? coveredRaw : undefined;
   return {
     v: 1,
     lesson,
@@ -92,6 +100,8 @@ export function asTutorAnswer(value: unknown): TutorAnswer | null {
     ...(review_status ? { review_status } : {}),
     ...(decision ? { decision } : {}),
     ...(outside_lane_empty ? { outside_lane_empty: true } : {}),
+    ...(outside_off_subject ? { outside_off_subject: true } : {}),
+    ...(video_covered !== undefined ? { video_covered } : {}),
     ...(web_search ? { web_search } : {}),
   };
 }

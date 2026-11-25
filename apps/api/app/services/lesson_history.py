@@ -202,14 +202,43 @@ class LessonHistoryService:
         segments = await self._load_segments(video)
         return video, segments
 
+    async def set_pinned(
+        self,
+        *,
+        workspace_id: uuid.UUID,
+        video_id: uuid.UUID,
+        pinned: bool,
+    ) -> Video:
+        video = await self._gemini_video(video_id, workspace_id)
+        if video is None:
+            raise LessonHistoryError(404, "LESSON_NOT_IN_WORKSPACE", LESSON_NOT_IN_WORKSPACE)
+        # Pin state only. Unpinning does not trim here; the next save, open, or
+        # limit change drops the oldest unpinned lessons with the same sequence.
+        video.pinned = pinned
+        await self._session.flush()
+        return video
+
+    async def remove_lesson(self, *, workspace_id: uuid.UUID, video_id: uuid.UUID) -> None:
+        """Delete one lesson with the same per-video sequence trim uses."""
+        video = await self._gemini_video(video_id, workspace_id)
+        if video is None:
+            raise LessonHistoryError(404, "LESSON_NOT_IN_WORKSPACE", LESSON_NOT_IN_WORKSPACE)
+        await self._delete_lessons(workspace_id, [video.id])
+
     async def trim(self, workspace_id: uuid.UUID) -> None:
         workspace = await self._workspace(workspace_id)
         limit = int(workspace.learning_history_limit)
         lessons = await self._gemini_lessons(workspace_id)
-        stale = lessons[limit:]
+        # Pinned lessons are kept and do not count toward the limit.
+        unpinned = [video for video in lessons if not video.pinned]
+        stale = unpinned[limit:]
         if not stale:
             return
-        video_ids = [video.id for video in stale]
+        await self._delete_lessons(workspace_id, [video.id for video in stale])
+
+    async def _delete_lessons(self, workspace_id: uuid.UUID, video_ids: list[uuid.UUID]) -> None:
+        if not video_ids:
+            return
         for video_id in video_ids:
             self._forget_cache(workspace_id, video_id)
         await self._session.execute(

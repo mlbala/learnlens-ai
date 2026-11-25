@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool
 
 
 class RegisterRequest(BaseModel):
@@ -98,6 +98,7 @@ class VideoOut(BaseModel):
     metadata_json: dict[str, Any] | None = None
     transcript_access: bool = False
     coverage: str | None = None
+    pinned: bool = False
 
 
 class ImportNoticeOut(BaseModel):
@@ -694,6 +695,7 @@ class LessonSummaryOut(BaseModel):
     summary: str
     key_points: list[str]
     transcript_access: bool = True
+    pinned: bool = False
     segment_ids: list[uuid.UUID]
 
 
@@ -720,6 +722,18 @@ class LearningHistorySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     learning_history_limit: int = Field(ge=1, le=100)
+
+
+class PinLessonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # JSON true/false only; "yes", 1, or "true" are rejected rather than coerced.
+    pinned: StrictBool
+
+
+class PinLessonOut(BaseModel):
+    video_id: uuid.UUID
+    pinned: bool
 
 
 class LessonChatSectionIn(BaseModel):
