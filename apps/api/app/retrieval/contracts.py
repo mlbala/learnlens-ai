@@ -142,3 +142,10 @@ class VectorStore(Protocol):
     def collection_dense_size(self, collection: str) -> int | None: ...
 
     def count_points(self, collection: str) -> int: ...
+
+    def existing_payloads(
+        self,
+        *,
+        collection: str,
+        point_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]: ...

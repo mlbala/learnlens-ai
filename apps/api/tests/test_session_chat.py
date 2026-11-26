@@ -198,9 +198,9 @@ def test_first_message_creates_one_thread_and_stamps_segments(client: TestClient
     video_id = saved["video"]["id"]
     client.app.state.session_reranker = _KeepReranker()
     segment_ids = [row["id"] for row in saved["segments"]]
-    assert _segment_count(client, video_id) == 2
+    assert _segment_count(client, video_id) == 3
     before = _segment_rows(client, video_id)
-    assert [row[1] for row in before] == [None, None]
+    assert [row[1] for row in before] == [None, None, None]
 
     empty = client.get(f"/api/v1/lesson-chat/videos/{video_id}")
     assert empty.status_code == 200, empty.text
@@ -261,10 +261,10 @@ def test_first_message_creates_one_thread_and_stamps_segments(client: TestClient
 
     after = _segment_rows(client, video_id)
     assert [row[0] for row in after] == segment_ids
-    assert [row[1] for row in after] == [thread_id, thread_id]
+    assert [row[1] for row in after] == [thread_id, thread_id, thread_id]
     assert [row[2] for row in after] == [row[2] for row in before]
-    assert [row[3] for row in after] == ["video_transcript", "video_transcript"]
-    assert _segment_count(client, video_id) == 2
+    assert [row[3] for row in after] == ["video_transcript"] * 3
+    assert _segment_count(client, video_id) == 3
 
     listed = client.get(f"/api/v1/lesson-chat/threads/{thread_id}/messages")
     assert listed.status_code == 200, listed.text
@@ -517,7 +517,7 @@ def test_other_workspace_thread_is_not_readable_or_writable(client: TestClient) 
 
     still = _segment_rows(client, video_id)
     assert still == owner_segments
-    assert [row[1] for row in still] == [thread_id, thread_id]
+    assert [row[1] for row in still] == [thread_id, thread_id, thread_id]
     copied_rows = _segment_rows(client, copied["video"]["id"])
-    assert [row[1] for row in copied_rows] == [other["thread"]["id"], other["thread"]["id"]]
+    assert [row[1] for row in copied_rows] == [other["thread"]["id"]] * 3
     assert [row[0] for row in copied_rows] == [row["id"] for row in copied["segments"]]

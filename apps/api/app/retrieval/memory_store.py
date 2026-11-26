@@ -72,6 +72,19 @@ class InMemoryVectorStore:
         col = self._collections.get(collection)
         return 0 if col is None else len(col.points)
 
+    def existing_payloads(
+        self,
+        *,
+        collection: str,
+        point_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        col = self._collections.get(collection)
+        if col is None:
+            return {}
+        return {
+            pid: dict(col.points[pid]["payload"]) for pid in point_ids if pid in col.points
+        }
+
     def upsert_chunks(
         self,
         *,

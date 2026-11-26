@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { lessonModelChain, listGeminiModels, shouldTryNextModel } from "@/lib/lesson/gemini-models";
-import { recoverLessonFields } from "@/lib/lesson/notes";
-import { toLessonTitle } from "@/lib/lesson/title";
+import { LESSON_PROMPT, readLesson } from "@/lib/lesson/lesson-reply";
 
 export const maxDuration = 180;
 
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 /** All model attempts for one lesson finish inside this, under maxDuration. */
 const BUILD_BUDGET_MS = 170_000;
-/** One model reading one video. Longer videos need more than a short chat call. */
-const ATTEMPT_TIMEOUT_MS = 60_000;
+/** One model reading one video and writing its full transcript. */
+const ATTEMPT_TIMEOUT_MS = 80_000;
+/** Room for the full transcript of a video up to about an hour long. */
+const LESSON_OUTPUT_TOKENS = 16_384;
 /** Not worth starting another video read with less time than this left. */
 const MIN_ATTEMPT_MS = 8_000;
 /** Passes over the Flash-Lite chain. "High demand" errors usually clear within seconds. */
@@ -18,20 +19,6 @@ const LESSON_PASSES = 2;
 const PASS_BACKOFF_MS = 3_000;
 
 const UNREADABLE = "Gemini could not read this video. It may be private, age-gated, or too long.";
-
-type LessonPayload = {
-  title?: string;
-  summary?: string;
-  key_points?: string[];
-  transcript?: string;
-};
-
-type BuiltLesson = {
-  title: string;
-  summary: string;
-  key_points: string[];
-  transcript: string;
-};
 
 /** Model id and what happened: ok, timeout, an HTTP status, or empty:<finish reason>. No lesson text. */
 type Attempt = { model: string; outcome: string };
@@ -57,7 +44,7 @@ async function gemini(parts: unknown[], model: string, apiKey: string, timeoutMs
         generationConfig: {
           temperature: 0.2,
           responseMimeType: "application/json",
-          maxOutputTokens: 4096,
+          maxOutputTokens: LESSON_OUTPUT_TOKENS,
         },
       }),
       signal: AbortSignal.timeout(timeoutMs),
@@ -83,31 +70,6 @@ async function gemini(parts: unknown[], model: string, apiKey: string, timeoutMs
   const text = candidate?.content?.parts?.map((p) => p.text || "").join("") || "";
   const finish = candidate?.finishReason || body?.promptFeedback?.blockReason || "NO_CANDIDATE";
   return { ok: true as const, text, finish };
-}
-
-/** The lesson fields from one model reply, or null when the model could not read the video. */
-function readLesson(text: string): BuiltLesson | null {
-  let parsed: LessonPayload = {};
-  try {
-    const value: unknown = JSON.parse(text);
-    // Some Flash-Lite models wrap the object in an array: [{ "title": ... }].
-    const object = Array.isArray(value) ? value.find((item) => item && typeof item === "object") : value;
-    parsed = (object && typeof object === "object" ? object : {}) as LessonPayload;
-  } catch {
-    parsed = { summary: text, transcript: text, key_points: [] };
-  }
-  const lesson = recoverLessonFields({
-    summary: parsed.summary || "",
-    key_points: parsed.key_points,
-    transcript: parsed.transcript,
-  });
-  if (!lesson.summary && !lesson.transcript) return null;
-  return {
-    title: toLessonTitle(parsed.title || ""),
-    summary: lesson.summary || "",
-    key_points: lesson.keyPoints,
-    transcript: lesson.transcript || lesson.summary || "",
-  };
 }
 
 function logBuild(videoId: string, attempts: Attempt[], model: string | null): void {
@@ -139,8 +101,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A public 11-character YouTube video id is required." }, { status: 400 });
   }
 
-  const prompt =
-    "Watch this public YouTube video. Return compact JSON with keys title, summary, key_points, and transcript. Summary is two or three short paragraphs of plain sentences. key_points is up to 6 complete sentences. Transcript is the main spoken points in a few paragraphs. Title is a short plain name with no emoji, hashtags, or decoration. Do not invent timestamps. If you cannot access the video, set summary and transcript to empty strings.";
+  const prompt = LESSON_PROMPT;
 
   const parts = [
     {
@@ -174,7 +135,7 @@ export async function POST(request: Request) {
         }
         continue;
       }
-      const lesson = readLesson(result.text);
+      const lesson = readLesson(result.text, result.finish);
       if (!lesson) {
         // Nothing usable from this model this time; the next model or the next pass may still read the video.
         attempts.push({ model, outcome: `empty:${result.finish}` });

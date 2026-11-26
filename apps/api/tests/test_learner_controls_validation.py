@@ -201,7 +201,7 @@ def test_pin_and_remove_require_csrf(client: TestClient) -> None:
     assert pinned.json()["error"]["code"] == "CSRF_FAILED"
     # Nothing changed.
     assert _listed(client) == [video_id]
-    assert _count(client, TranscriptSegment, video_id) == 2
+    assert _count(client, TranscriptSegment, video_id) == 3
 
 
 @pytest.mark.parametrize(
@@ -411,7 +411,7 @@ def test_remove_only_touches_the_callers_workspace(client: TestClient) -> None:
 
     _login(client, "same-video-a@example.com")
     assert _listed(client) == [first_video]
-    assert _count(client, TranscriptSegment, first_video) == 2
+    assert _count(client, TranscriptSegment, first_video) == 3
     assert _count(client, ExternalEvidence, first_video) == 1
     assert _count(client, MessageCitation, first_video) == 1
 
