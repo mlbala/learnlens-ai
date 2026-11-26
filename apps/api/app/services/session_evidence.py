@@ -375,20 +375,25 @@ async def index_origin_points(settings: Settings, points: list[OriginPoint]) -> 
     )
     if not points:
         return collection
+    point_ids = [_point_id(point) for point in points]
+    stored = store.existing_payloads(collection=collection, point_ids=point_ids)
+    # A point is reused only when it still names the same Neon row; otherwise re-embed it.
+    pending = [
+        (point, point_id)
+        for point, point_id in zip(points, point_ids, strict=True)
+        if not _same_row(stored.get(point_id), point)
+    ]
+    if not pending:
+        return collection
     embedder = build_embedding_model(settings)
-    vectors = await embedder.embed_documents([point.text for point in points])
+    vectors = await embedder.embed_documents([point.text for point, _ in pending])
     records: list[ChunkIndexRecord] = []
-    for point, vector in zip(points, vectors, strict=True):
+    for (point, point_id), vector in zip(pending, vectors, strict=True):
         start_ms, end_ms = stored_timing(point.start_ms, point.end_ms)
         verified = verify_vector_dimensions(vector, profile=profile)
         records.append(
             ChunkIndexRecord(
-                chunk_id=stable_point_id(
-                    workspace_id=point.workspace_id,
-                    thread_id=point.thread_id,
-                    evidence_origin=point.evidence_origin,
-                    content_hash=point.content_hash,
-                ),
+                chunk_id=point_id,
                 workspace_id=point.workspace_id,
                 video_id=point.video_id,
                 source_asset_id=point.source_asset_id,
@@ -417,6 +422,27 @@ async def index_origin_points(settings: Settings, points: list[OriginPoint]) -> 
         records=records,
     )
     return collection
+
+
+def _point_id(point: OriginPoint) -> uuid.UUID:
+    return stable_point_id(
+        workspace_id=point.workspace_id,
+        thread_id=point.thread_id,
+        evidence_origin=point.evidence_origin,
+        content_hash=point.content_hash,
+    )
+
+
+def _same_row(payload: dict[str, object] | None, point: OriginPoint) -> bool:
+    if payload is None:
+        return False
+    segment = None if point.segment_id is None else str(point.segment_id)
+    evidence = None if point.evidence_id is None else str(point.evidence_id)
+    return (
+        payload.get("segment_id") == segment
+        and payload.get("evidence_id") == evidence
+        and payload.get("content_hash") == point.content_hash
+    )
 
 
 def video_watch_url(video: Video) -> str:

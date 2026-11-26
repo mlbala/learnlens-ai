@@ -133,6 +133,30 @@ class QdrantCloudStore:
                 details={"error_type": type(exc).__name__},
             ) from exc
 
+    def existing_payloads(
+        self,
+        *,
+        collection: str,
+        point_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """Stored id fields for the points that already exist. Empty when the lookup fails."""
+        if not point_ids:
+            return {}
+        try:
+            records = self._client.retrieve(
+                collection_name=collection,
+                ids=[str(pid) for pid in point_ids],
+                with_payload=["segment_id", "evidence_id", "content_hash"],
+                with_vectors=False,
+            )
+        except Exception as exc:
+            logger.info(
+                "qdrant_retrieve_failed",
+                extra={"error_type": type(exc).__name__, "collection": collection},
+            )
+            return {}
+        return {uuid.UUID(str(record.id)): dict(record.payload or {}) for record in records}
+
     def upsert_chunks(
         self,
         *,

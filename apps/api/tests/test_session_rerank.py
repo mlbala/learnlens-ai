@@ -194,7 +194,7 @@ def test_unrelated_question_with_search_off_abstains(client: TestClient) -> None
         {"heading": "Coverage", "body": "The video does not cover this question."}
     ]
     assert "score" not in body
-    assert _segment_count(client, saved["video"]["id"]) == 2
+    assert _segment_count(client, saved["video"]["id"]) == 3
 
 
 def test_retrieve_route_keeps_the_video_lane_first(client: TestClient) -> None:
@@ -254,7 +254,7 @@ def test_retrieve_route_keeps_the_video_lane_first(client: TestClient) -> None:
     assert reranker.calls[0] and all(origin == ORIGIN_VIDEO for origin, _text in reranker.calls[0])
     assert OUTSIDE not in reranker.calls[0][0][1]
     assert all(origin == ORIGIN_EXTERNAL for origin, _text in reranker.calls[1])
-    assert _segment_count(client, video_id) == 2
+    assert _segment_count(client, video_id) == 3
     assert _evidence_count(client, video_id) == 1
     points_after_first = _point_count(client)
     again = _retrieve(

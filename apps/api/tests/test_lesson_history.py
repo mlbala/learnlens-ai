@@ -94,11 +94,17 @@ def test_save_flags_segments_and_reopen_keeps_ids(client: TestClient) -> None:
     _register(client, "history-reopen@example.com")
     first = _save(client, 1)
     segments = first["segments"]
-    assert len(segments) == 2
+    # The summary and key points come first as one searchable overview passage.
+    expected = [
+        "Overview of the video: Summary 1 Key points: Point 1",
+        "Passage one for 1.",
+        "Passage two for 1.",
+    ]
+    assert len(segments) == 3
     assert first["source_kind"] == "gemini_youtube"
     assert first["created"] is True
     ids = [row["id"] for row in segments]
-    for row, text in zip(segments, ["Passage one for 1.", "Passage two for 1."], strict=True):
+    for row, text in zip(segments, expected, strict=True):
         assert row["text"] == text
         assert row["start_ms"] is None
         assert row["end_ms"] is None

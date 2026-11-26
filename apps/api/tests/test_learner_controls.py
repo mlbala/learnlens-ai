@@ -153,7 +153,7 @@ def test_pin_survives_trim_and_unpin_then_deletes(client: TestClient) -> None:
     kept = {item["id"] for item in listed.json()["items"]}
     assert kept == {pinned_id, newest_id}
     assert _counts(client, uuid.UUID(oldest_id)) == (0, 0, 0)
-    assert _counts(client, uuid.UUID(pinned_id))[0] == 2
+    assert _counts(client, uuid.UUID(pinned_id))[0] == 3
 
     unpin = client.put(
         f"/api/v1/learning-history/{pinned_id}/pin",
@@ -163,7 +163,7 @@ def test_pin_survives_trim_and_unpin_then_deletes(client: TestClient) -> None:
     assert unpin.status_code == 200, unpin.text
     assert unpin.json()["pinned"] is False
     # Unpinning alone keeps the row; the next trim drops the oldest unpinned lesson.
-    assert _counts(client, uuid.UUID(pinned_id))[0] == 2
+    assert _counts(client, uuid.UUID(pinned_id))[0] == 3
 
     retrim = client.put(
         "/api/v1/settings/learning-history",
@@ -186,7 +186,7 @@ def test_remove_clears_segments_and_thread(client: TestClient) -> None:
         user_id=owner["user"]["id"],
         video_id=video_id,
     )
-    assert _counts(client, uuid.UUID(video_id)) == (2, 1, 1)
+    assert _counts(client, uuid.UUID(video_id)) == (3, 1, 1)
 
     removed = client.delete(
         f"/api/v1/learning-history/{video_id}",
@@ -226,4 +226,4 @@ def test_other_workspace_cannot_remove_or_pin(client: TestClient) -> None:
     still = client.get(f"/api/v1/learning-history/{video_id}")
     assert still.status_code == 200, still.text
     assert still.json()["video"]["pinned"] is False
-    assert _counts(client, uuid.UUID(video_id))[0] == 2
+    assert _counts(client, uuid.UUID(video_id))[0] == 3

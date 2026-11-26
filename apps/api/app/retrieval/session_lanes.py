@@ -244,7 +244,8 @@ async def _model_rank(
             user_input=f"QUESTION:\n{question.strip()}\n\n{listing}",
             evidence=[],
             response_schema=RERANK_SCHEMA,
-            max_output_tokens=512,
+            # Room for every candidate: about 30 tokens per id and score.
+            max_output_tokens=2048,
             temperature=0.0,
             timeout_seconds=30,
             prompt_version="session-rerank-v1",

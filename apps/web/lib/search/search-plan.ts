@@ -11,6 +11,15 @@ const STOP = new Set([
   "what", "how", "why", "is", "are", "was", "were", "be", "about", "into", "using", "use",
   "video", "lesson", "explain", "please", "does", "do", "can", "you", "it", "its", "their",
   "when", "where", "who", "which", "your", "our", "not", "but", "if", "as", "at", "by",
+  // Everyday filler that is frequent in speech but never a search topic.
+  "one", "two", "another", "other", "others", "have", "has", "had", "having", "will", "would",
+  "could", "should", "may", "might", "must", "just", "like", "also", "then", "than", "there",
+  "they", "them", "these", "those", "some", "any", "all", "more", "most", "very", "much", "many",
+  "get", "gets", "got", "make", "makes", "made", "new", "now", "way", "ways", "thing", "things",
+  "really", "going", "know", "here", "see", "say", "says", "said", "been", "being", "each",
+  "every", "because", "out", "over", "only", "own", "same", "such", "too", "need", "needs",
+  "want", "let", "lot", "lots", "pretty", "soon", "seems", "seem", "well", "even", "still",
+  "first", "next", "last", "we're", "you're", "it's", "that's", "don't", "can't", "overview",
 ]);
 
 const ACCEPTED_NOTE = "Searched academic papers and official documents.";

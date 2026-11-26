@@ -48,7 +48,11 @@ DEFAULT_LEARNING_HISTORY_LIMIT = 10
 MIN_LEARNING_HISTORY_LIMIT = 1
 MAX_LEARNING_HISTORY_LIMIT = 100
 _MAX_PASSAGES = 200
+# Target passage length. Small enough that one passage holds one idea.
+PASSAGE_CHARS = 900
+OVERVIEW_PREFIX = "Overview of the video:"
 _BLANK_LINES = re.compile(r"\n\s*\n")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
 logger = logging.getLogger(__name__)
 
@@ -76,18 +80,86 @@ def passage_hash(text: str) -> str:
 
 
 def split_transcript(transcript: str) -> list[str]:
-    """Ordered passages. Blank lines first, then single lines. No invented times."""
+    """Ordered passages of at most about PASSAGE_CHARS each. No invented times.
+
+    Paragraphs are split on blank lines (or single lines when there are none),
+    and a paragraph longer than one passage is cut at sentence ends, so each
+    passage can be matched to a question on its own.
+    """
     text = transcript.replace("\r\n", "\n").replace("\r", "\n").strip()
     if not text:
         return []
-    parts = [part.strip() for part in _BLANK_LINES.split(text) if part.strip()]
-    if len(parts) == 1 and "\n" in parts[0]:
-        parts = [part.strip() for part in parts[0].split("\n") if part.strip()]
+    paragraphs = [part.strip() for part in _BLANK_LINES.split(text) if part.strip()]
+    if len(paragraphs) == 1 and "\n" in paragraphs[0]:
+        paragraphs = [part.strip() for part in paragraphs[0].split("\n") if part.strip()]
+    parts = _pack(paragraphs)
     if len(parts) > _MAX_PASSAGES:
         head = parts[: _MAX_PASSAGES - 1]
         tail = "\n\n".join(parts[_MAX_PASSAGES - 1 :])
         parts = [*head, tail]
     return parts
+
+
+def lesson_passages(transcript: str, summary: str, key_points: list[str]) -> list[str]:
+    """Searchable passages for one lesson: the overview first, then the transcript.
+
+    The summary and key points were written from the same video, so a question
+    they answer is covered by the video even when the transcript text is thin.
+    Repeated text is kept once so every passage has its own hash.
+    """
+    overview_parts = [" ".join(summary.split())] if summary.strip() else []
+    points = [" ".join(point.split()) for point in key_points if point and point.strip()]
+    if points:
+        overview_parts.append("Key points: " + " ".join(points))
+    # One paragraph, so a short overview stays one passage.
+    overview = f"{OVERVIEW_PREFIX} " + " ".join(overview_parts) if overview_parts else ""
+    passages: list[str] = []
+    seen: set[str] = set()
+    for passage in [*split_transcript(overview), *split_transcript(transcript)]:
+        key = " ".join(passage.split()).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        passages.append(passage)
+    return passages
+
+
+def _pack(paragraphs: list[str]) -> list[str]:
+    """Each paragraph stays its own passage; a long one becomes several."""
+    passages: list[str] = []
+    for paragraph in paragraphs:
+        current = ""
+        for piece in _pieces(paragraph):
+            if current and len(current) + 1 + len(piece) > PASSAGE_CHARS:
+                passages.append(current)
+                current = ""
+            current = f"{current} {piece}" if current else piece
+        if current:
+            passages.append(current)
+    return passages
+
+
+def _pieces(paragraph: str) -> list[str]:
+    """Sentences, and word runs for any sentence longer than one passage."""
+    if len(paragraph) <= PASSAGE_CHARS:
+        return [paragraph]
+    pieces: list[str] = []
+    for sentence in _SENTENCE_END.split(paragraph):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if len(sentence) <= PASSAGE_CHARS:
+            pieces.append(sentence)
+            continue
+        run = ""
+        for word in sentence.split():
+            if run and len(run) + 1 + len(word) > PASSAGE_CHARS:
+                pieces.append(run)
+                run = ""
+            run = f"{run} {word}" if run else word
+        if run:
+            pieces.append(run)
+    return pieces
 
 
 class LessonHistoryService:
@@ -129,8 +201,7 @@ class LessonHistoryService:
         source_url: str,
     ) -> tuple[Video, list[TranscriptSegment], bool]:
         canonical = self._canonical_watch_url(source_url, youtube_video_id)
-        passages = split_transcript(transcript)
-        if not passages:
+        if not split_transcript(transcript):
             raise LessonHistoryError(
                 422,
                 "EMPTY_TRANSCRIPT",
@@ -138,6 +209,7 @@ class LessonHistoryService:
             )
         points = [point.strip() for point in key_points if point and point.strip()][:8]
         summary_text = summary.strip()
+        passages = lesson_passages(transcript, summary_text, points)
         cleaned_channel = None
         if channel_title and channel_title.strip():
             cleaned_channel = channel_title.strip()[:300]
@@ -155,7 +227,7 @@ class LessonHistoryService:
             workspace_id=workspace_id,
             user_id=user_id,
             passages=passages,
-            transcript=transcript.strip(),
+            transcript="\n\n".join(passages),
         )
         video.last_opened_at = utcnow()
         await self._session.flush()
