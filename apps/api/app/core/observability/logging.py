@@ -25,6 +25,8 @@ _CORRELATION_KEYS = (
     "status_code",
     "error_code",
     "duration_ms",
+    "db_queries",
+    "db_ms",
     "attributes",
 )
 

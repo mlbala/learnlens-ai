@@ -165,16 +165,17 @@ class AuthService:
             workspace_id = uuid.UUID(str(payload["wid"]))
         except (KeyError, ValueError, TypeError):
             return None
-        row = await self._sessions.get_by_id(session_id)
-        if row is None or row.revoked_at is not None:
+        found = await self._sessions.get_with_owner(session_id)
+        if found is None:
+            return None
+        row, user, workspace = found
+        if row.revoked_at is not None:
             return None
         if row.user_id != user_id or row.workspace_id != workspace_id:
             return None
         if _as_utc(row.expires_at) <= datetime.now(UTC):
             return None
-        user = await self._users.get_by_id(user_id)
-        workspace = await self._workspaces.get_by_id(workspace_id)
-        if user is None or workspace is None or user.status != "active":
+        if user.id != user_id or workspace.id != workspace_id or user.status != "active":
             return None
         await self._sessions.touch(row)
         return AuthContext(user=user, workspace=workspace, session=row)

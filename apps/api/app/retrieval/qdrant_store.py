@@ -36,6 +36,16 @@ PAYLOAD_INDEX_FIELDS = (
 )
 
 
+# Collections this process already checked or created, with their dense size.
+# Setting up a collection is 8 round trips; after the first time it is skipped.
+_READY: dict[tuple[str, str], int] = {}
+
+
+def reset_ready_collections() -> None:
+    """Forget checked collections (tests, or after a collection is dropped)."""
+    _READY.clear()
+
+
 class QdrantCloudStore:
     """Connects exclusively via QDRANT_URL + QDRANT_API_KEY (no local Docker Qdrant)."""
 
@@ -60,6 +70,8 @@ class QdrantCloudStore:
 
     def ensure_collection(self, *, profile_id: str, dimensions: int) -> str:
         name = collection_name_for(profile_id)
+        if _READY.get((self._url, name)) == dimensions:
+            return name
         try:
             exists = self._client.collection_exists(name)
             if exists:
@@ -75,6 +87,7 @@ class QdrantCloudStore:
                         actual_dimensions=size,
                     )
                 self._ensure_payload_indexes(name, strict=False)
+                _READY[(self._url, name)] = dimensions
                 return name
 
             self._client.create_collection(
@@ -92,6 +105,7 @@ class QdrantCloudStore:
                 },
             )
             self._ensure_payload_indexes(name, strict=True)
+            _READY[(self._url, name)] = dimensions
             return name
         except EmbeddingProfileMismatch:
             raise
@@ -128,6 +142,7 @@ class QdrantCloudStore:
             result = self._client.count(collection_name=collection, exact=True)
             return int(result.count)
         except Exception as exc:
+            _READY.pop((self._url, collection), None)
             raise VectorStoreUnavailable(
                 "Qdrant Cloud count failed.",
                 details={"error_type": type(exc).__name__},
@@ -167,7 +182,9 @@ class QdrantCloudStore:
     ) -> int:
         if not records:
             return 0
-        size = self.collection_dense_size(collection)
+        size = _READY.get((self._url, collection))
+        if size is None:
+            size = self.collection_dense_size(collection)
         if size is not None and size != dimensions:
             raise EmbeddingProfileMismatch(
                 "Refusing to upsert into a collection with incompatible dimensions.",
@@ -203,6 +220,7 @@ class QdrantCloudStore:
         except EmbeddingProfileMismatch:
             raise
         except Exception as exc:
+            _READY.pop((self._url, collection), None)
             logger.warning(
                 "qdrant_upsert_failed",
                 extra={"error_type": type(exc).__name__, "collection": collection},
@@ -327,6 +345,7 @@ class QdrantCloudStore:
         except EmbeddingProfileMismatch:
             raise
         except Exception as exc:
+            _READY.pop((self._url, collection), None)
             logger.warning(
                 "qdrant_search_failed",
                 extra={"error_type": type(exc).__name__, "collection": collection},
