@@ -31,6 +31,7 @@ from app.retrieval.session_lanes import (
 )
 from app.retrieval.subject_gate import SubjectGate, lesson_subject
 from app.services.answer_usage import answer_usage_line
+from app.services.packet_cache import packet_key, remember_packet, take_packet
 from app.services.session_evidence import EvidencePacket, SearchHitInput, SessionEvidenceService
 from app.services.session_judge import SessionJudge, build_judge_request, select_judge
 from app.services.session_review import (
@@ -326,24 +327,38 @@ class SessionChatService:
             user_id=user_id,
             video_id=video_id,
         )
-        await self._stamp_segments(
-            workspace_id=workspace_id,
-            video_id=video_id,
-            thread_id=thread.id,
-        )
         prior = await self._messages.list_recent(
             thread_id=thread.id,
             workspace_id=workspace_id,
             limit=HISTORY_TURN_LIMIT * 4,
         )
         packed = pack_followup(turns_from_messages(prior), external_search=external_search)
-        packet = await self._packet(
-            workspace_id=workspace_id,
-            video_id=video_id,
-            thread_id=thread.id,
-            question=cleaned,
-            external_search=external_search,
+        # Reuse the evidence retrieve chose for this turn, so the review checks the
+        # draft against the passages it was written from. Rebuild only when missing.
+        packet = take_packet(
+            packet_key(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+                question=cleaned,
+                external_search=external_search,
+            )
         )
+        logger.info("session_packet_reused" if packet is not None else "session_packet_rebuilt")
+        if packet is None:
+            # Retrieve already stamped this thread on its segments when it ran.
+            await self._stamp_segments(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+            )
+            packet = await self._packet(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+                question=cleaned,
+                external_search=external_search,
+            )
         timings = await self._video_timings(packet.passages)
         try:
             if answer is None:
@@ -420,15 +435,17 @@ class SessionChatService:
         )
         if assistant.created_at <= user.created_at:
             assistant.created_at = user.created_at + timedelta(microseconds=1)
-        await self._session.execute(
-            update(ExternalEvidence)
-            .where(
-                ExternalEvidence.workspace_id == workspace_id,
-                ExternalEvidence.thread_id == thread.id,
-                ExternalEvidence.message_id.is_(None),
+        if external_search:
+            # Outside rows are only stored when search is on.
+            await self._session.execute(
+                update(ExternalEvidence)
+                .where(
+                    ExternalEvidence.workspace_id == workspace_id,
+                    ExternalEvidence.thread_id == thread.id,
+                    ExternalEvidence.message_id.is_(None),
+                )
+                .values(message_id=user.id)
             )
-            .values(message_id=user.id)
-        )
         await self._session.flush()
         segment_ids = await self._segment_ids(workspace_id, video_id)
         video_kept = sum(
@@ -514,6 +531,16 @@ class SessionChatService:
             external_search=external_search,
             watch_url=video.source_url or "",
             subject=lesson_subject(video),
+        )
+        remember_packet(
+            packet_key(
+                workspace_id=workspace_id,
+                video_id=video_id,
+                thread_id=thread.id,
+                question=cleaned,
+                external_search=external_search,
+            ),
+            packet,
         )
         return thread, packet
 

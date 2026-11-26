@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.observability.db_stats import start_request_stats
 from app.core.observability.tracing import (
     REQUEST_ID_HEADER,
     TRACE_ID_HEADER,
@@ -46,6 +47,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         )
         request.state.request_id = request_id
         request.state.trace_id = ctx.trace_id
+        db_stats = start_request_stats()
 
         with start_span(
             "http.request",
@@ -65,6 +67,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 ctx.trace_id, span.context.span_id
             )
             span.set_attribute("http.status_code", response.status_code)
+            span.set_attribute("db.queries", db_stats.queries)
+            span.set_attribute("db.ms", db_stats.milliseconds)
             if response.status_code >= 500:
                 span.record_error("HTTP_5XX")
             logger.info(
@@ -75,6 +79,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": response.status_code,
+                    # Each query is a round trip to the database; no SQL text is logged.
+                    "db_queries": db_stats.queries,
+                    "db_ms": db_stats.milliseconds,
                 },
             )
             clear_context()

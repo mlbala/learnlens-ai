@@ -26,6 +26,7 @@ from app.api.v1 import (
 from app.core.api_abuse import ApiAbuseMiddleware
 from app.core.errors import http_exception_handler
 from app.core.observability import configure_circuit_breaker, configure_structured_logging
+from app.core.observability.db_stats import install_db_stats
 from app.core.policies.ai_guardrails import configure_ai_guardrails
 from app.core.policies.audit_policy import configure_audit_policy
 from app.core.policies.usage_policy import configure_usage_policy
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = None
     if settings.database_url:
         engine = create_engine(settings)
+        install_db_stats(engine)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
     else:
