@@ -74,7 +74,9 @@ export async function askGeminiLesson(input: {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: input.explanationMode === "simple" ? 700 : 2048,
+          // Detailed answers with web search carry up to four web paragraphs on top of the lesson.
+          maxOutputTokens:
+            input.explanationMode === "simple" ? 700 : input.externalSearch ? 3072 : 2048,
           responseMimeType: "application/json",
         },
       }),

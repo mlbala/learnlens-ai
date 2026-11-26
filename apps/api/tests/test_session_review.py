@@ -9,6 +9,7 @@ import anyio
 import pytest
 from app.ai.contracts import ModelCapabilities, ModelRequest, ModelResult
 from app.retrieval.session_lanes import ORIGIN_EXTERNAL, ORIGIN_VIDEO, LanePassage
+from app.services.session_chat import answer_shape
 from app.services.session_review import (
     REVIEW_INSTRUCTIONS,
     ModelSessionReviewer,
@@ -273,6 +274,60 @@ def test_origin_mix_regenerates_once(client: TestClient) -> None:
     assert reviewer.requests[1].draft["lesson"][0]["body"] != (
         "Photosynthesis converts sunlight into glucose in leaves."
     )
+
+
+def test_answer_shape_keeps_the_depth_the_learner_asked_for() -> None:
+    detailed = answer_shape("standard", blend=True)
+    assert "What it is, How it works, Example, and Watch-outs" in detailed
+    assert "two to four sections" in detailed
+    assert "Cover every one of the blocks labeled external_search" in detailed
+    assert "four sections" in answer_shape("technical", blend=True)
+
+    brief = answer_shape("simple", blend=True)
+    assert "one section titled Answer" in brief
+    assert "external must contain one section." in brief
+    assert "two to four" not in brief
+
+    assert "external must be an empty array." in answer_shape("standard", blend=False)
+
+
+def test_regenerated_answer_asks_for_the_same_sections(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.session_chat as session_chat
+
+    captured: list[ModelRequest] = []
+    real_build = session_chat.build_text_model
+
+    def capturing_build(settings, **kwargs):  # noqa: ANN001, ANN202
+        model = real_build(settings, **kwargs)
+        original = model.generate_structured
+
+        async def spy(request: ModelRequest) -> ModelResult:
+            captured.append(request)
+            return await original(request)
+
+        model.generate_structured = spy
+        return model
+
+    monkeypatch.setattr(session_chat, "build_text_model", capturing_build)
+    reviewer = _ScriptedReviewer([ReviewVerdict(False, ("origin_mix",)), ReviewVerdict(True, ())])
+    client.app.state.session_reviewer = reviewer
+    _register(client, "review-shape@example.com")
+    saved = _save(client, GLUCOSE)
+    created = _post(
+        client,
+        saved["video"]["id"],
+        "How does photosynthesis make glucose?",
+        external_search=False,
+        answer=_lesson("Photosynthesis converts sunlight into glucose in leaves."),
+    )
+    assert created["assistant_message"]["content_json"]["review_status"] == "regenerated"
+    rewrites = [request for request in captured if request.purpose == "lesson_followup"]
+    assert len(rewrites) == 1
+    assert "What it is, How it works, Example, and Watch-outs" in rewrites[0].user_input
+    assert "external must be an empty array." in rewrites[0].user_input
+    assert rewrites[0].max_output_tokens == 2048
 
 
 def test_second_rejection_withholds_the_draft(client: TestClient) -> None:

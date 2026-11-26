@@ -6,6 +6,14 @@ export type TopicSource = {
   provider?: "tavily" | "semantic_scholar" | "openalex";
 };
 
+/**
+ * How much of each abstract or page excerpt the answer model sees. A full
+ * abstract is usually 1,000 to 1,500 characters; 480 cut most papers to their
+ * first sentence, which left the web panel with little to explain. The API
+ * accepts up to 4,000 characters per snippet.
+ */
+export const SNIPPET_CHARS = 1_500;
+
 const ACADEMIC =
   /(arxiv\.org|semanticscholar\.org|doi\.org|acm\.org|ieeexplore|ieee\.org|nature\.com|science\.org|springer\.com|nih\.gov|pubmed|openalex\.org|ssrn\.com|acm\.dl)/i;
 const OFFICIAL =
@@ -43,7 +51,7 @@ function openAlexAbstract(index: Record<string, number[]> | null | undefined): s
   for (const [word, positions] of Object.entries(index)) {
     for (const position of positions) words[position] = word;
   }
-  return words.filter(Boolean).join(" ").slice(0, 480);
+  return words.filter(Boolean).join(" ").slice(0, SNIPPET_CHARS);
 }
 
 async function semanticScholar(query: string): Promise<TopicSource[]> {
@@ -64,7 +72,7 @@ async function semanticScholar(query: string): Promise<TopicSource[]> {
     return {
       title: paper.title || "Untitled paper",
       url: link,
-      snippet: (paper.abstract || "").slice(0, 480),
+      snippet: (paper.abstract || "").slice(0, SNIPPET_CHARS),
       kind: "paper" as const,
       provider: "semantic_scholar" as const,
     };
@@ -112,7 +120,7 @@ async function tavily(query: string, apiKey: string): Promise<TopicSource[]> {
   return (body?.results ?? []).map((result) => ({
     title: result.title || result.url || "Source",
     url: result.url || "",
-    snippet: (result.content || "").slice(0, 480),
+    snippet: (result.content || "").slice(0, SNIPPET_CHARS),
     kind: sourceKind(result.url || ""),
     provider: "tavily" as const,
   })).filter((result) => result.url);
