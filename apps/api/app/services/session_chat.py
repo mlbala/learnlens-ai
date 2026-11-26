@@ -169,6 +169,40 @@ def model_user_input(
     return "\n\n".join(blocks)
 
 
+def answer_shape(explanation_mode: str, *, blend: bool) -> str:
+    """Section rules for a rewritten answer. Same wording as the web draft prompt,
+    so a regenerated answer keeps the depth the learner asked for."""
+    detailed = (explanation_mode or "").strip().lower() != "simple"
+    if detailed:
+        lesson = (
+            "lesson must contain four sections titled exactly What it is, How it works, "
+            "Example, and Watch-outs. Each body is one clear paragraph of plain prose."
+        )
+    else:
+        lesson = (
+            "lesson must contain one section titled Answer. "
+            "The body is one or two plain paragraphs."
+        )
+    if not blend:
+        return f"{lesson} external must be an empty array."
+    basis = "the blocks labeled external_search"
+    if detailed:
+        external = (
+            "external must contain two to four sections with short descriptive headings. "
+            "Each body is a full paragraph of four to six plain sentences that explains what the "
+            "material says about the question: the main idea, how it works or how it was studied, "
+            "and what it adds beyond the video. "
+            f"Cover every one of {basis} that is relevant, and do not repeat the lesson panel."
+        )
+    else:
+        external = "external must contain one section. The body is one or two plain paragraphs."
+    return (
+        f"{lesson} {external} Use only {basis}. "
+        "Prefer academic papers and official documentation. Do not mention source numbers. "
+        "No markdown, no URLs, no timestamps."
+    )
+
+
 def turns_from_messages(messages: list[ChatMessage]) -> list[FollowupTurn]:
     turns: list[FollowupTurn] = []
     index = 0
@@ -325,6 +359,7 @@ class SessionChatService:
                 packet,
                 packed_history=packed,
                 question=cleaned,
+                explanation_mode=explanation_mode,
                 external_search=external_search,
                 draft=draft,
                 timings=timings,
@@ -543,6 +578,7 @@ class SessionChatService:
         *,
         packed_history: str,
         question: str,
+        explanation_mode: str,
         external_search: bool,
         draft: dict[str, Any],
         timings: dict[str, tuple[int | None, int | None]],
@@ -567,6 +603,7 @@ class SessionChatService:
                 packet,
                 packed_history=packed_history,
                 question=question,
+                explanation_mode=explanation_mode,
                 external_search=external_search,
                 reasons=verdict.reasons,
             )
@@ -664,6 +701,7 @@ class SessionChatService:
         *,
         packed_history: str,
         question: str,
+        explanation_mode: str,
         external_search: bool,
         reasons: tuple[str, ...],
     ) -> dict[str, Any]:
@@ -673,7 +711,8 @@ class SessionChatService:
             external_search=external_search,
             evidence_block=packet.prompt_block,
         )
-        prompt = f"{prompt}\n\n{rejection_note(reasons)}"
+        shape = answer_shape(explanation_mode, blend=packet.decision == "blend")
+        prompt = f"{prompt}\n\n{rejection_note(reasons)}\n\n{shape}"
         payload = await self._complete(prompt)
         structured = _structured_answer(payload, external_search=True)
         if not packet.video_covered:
@@ -704,10 +743,11 @@ class SessionChatService:
                 user_input=prompt,
                 evidence=[],
                 response_schema=LESSON_FOLLOWUP_SCHEMA,
-                max_output_tokens=1024,
+                # Room for four lesson sections plus up to four web paragraphs.
+                max_output_tokens=2048,
                 temperature=0.2,
                 timeout_seconds=30,
-                prompt_version="lesson-followup-v1",
+                prompt_version="lesson-followup-v2",
             )
         )
         self._note_usage(result.usage)

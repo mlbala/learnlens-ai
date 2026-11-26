@@ -34,9 +34,7 @@ export function buildLessonModelPrompt(input: {
     ? ordered.some((block) => block.evidence_origin === "external_search")
     : Boolean(sourceBlock);
   const external = hasExternal
-    ? usingEvidence
-      ? "external must contain the same kind of sections, using only the blocks labeled external_search. Prefer academic papers and official documentation. Do not mention source numbers."
-      : "external must contain the same kind of sections, using only the SOURCE excerpts. Prefer academic papers and official documentation. Do not mention source numbers."
+    ? externalShape(detailed, usingEvidence ? "the blocks labeled external_search" : "the SOURCE excerpts")
     : "external must be an empty array.";
   const memory = input.packedHistory?.trim() || "";
   const parts = [
@@ -58,6 +56,24 @@ export function buildLessonModelPrompt(input: {
   if (sourceBlock) parts.push(`SOURCES:\n${sourceBlock}`);
   parts.push(`QUESTION:\n${input.question}`);
   return parts.join("\n\n");
+}
+
+/**
+ * How the web panel is written. Detailed and technical answers get two to four
+ * full paragraphs that use every relevant outside passage; a brief answer gets
+ * one short section. The API's regenerate step uses the same wording.
+ */
+export function externalShape(detailed: boolean, basis: string): string {
+  const shape = detailed
+    ? "external must contain two to four sections with short descriptive headings. " +
+      "Each body is a full paragraph of four to six plain sentences that explains what the material says about the question: " +
+      "the main idea, how it works or how it was studied, and what it adds beyond the video. " +
+      `Cover every one of ${basis} that is relevant, and do not repeat the lesson panel.`
+    : "external must contain one section. The body is one or two plain paragraphs.";
+  return (
+    `${shape} Use only ${basis}. ` +
+    "Prefer academic papers and official documentation. Do not mention source numbers."
+  );
 }
 
 function orderedEvidence(evidence: PromptEvidence[] | undefined, externalSearch: boolean): PromptEvidence[] {
