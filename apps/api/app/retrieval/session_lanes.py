@@ -66,6 +66,20 @@ _OFFICIAL = (
     "ai.google.dev",
 )
 
+# A fixed scale, so the same passage gets about the same score on every call.
+RERANK_INSTRUCTIONS = (
+    "Score how well each passage answers the question, using only this scale: "
+    "1.0 = the passage directly answers the question; "
+    "0.7 = it answers part of the question or explains the thing asked about; "
+    "0.5 = it is on the same topic and gives useful context for the answer; "
+    "0.1 = it only shares a word or name with the question; "
+    "0.0 = it is unrelated. "
+    "A passage that defines, explains, or gives an example of the thing asked about "
+    "scores at least 0.7, even when it uses different words than the question. "
+    "Return JSON with ranked: one entry with id and score for every passage listed, "
+    "using the exact passage ids. Do not skip passages and do not add passages."
+)
+
 RERANK_SCHEMA: dict[str, object] = {
     "type": "object",
     "required": ["ranked"],
@@ -217,6 +231,8 @@ async def rank_lane(
             raise RuntimeError("No rerank model is configured.")
         else:
             scored = await _model_rank(text_model, question, passages)
+            if origin == ORIGIN_VIDEO and best_score(scored) < threshold:
+                scored = await _rescore(text_model, question, passages, scored)
     except Exception:
         logger.info(
             "session_rerank_lexical_fallback",
@@ -224,6 +240,34 @@ async def rank_lane(
         )
         scored = lexical_rank(question, passages)
     return scored, select_kept(scored, threshold=threshold, limit=limit)
+
+
+async def _rescore(
+    text_model: TextModel,
+    question: str,
+    passages: list[LanePassage],
+    first: list[ScoredPassage],
+) -> list[ScoredPassage]:
+    """Score once more before the video is called "not covered".
+
+    The model's scores for the same passages vary between calls, so one low run
+    could hide a passage that answers the question. Each passage keeps the higher
+    of its two scores. If the second call fails, the first scores stand.
+    """
+    try:
+        second = await _model_rank(text_model, question, passages)
+    except Exception:
+        logger.info("session_rerank_rescore_failed")
+        return first
+    again = {row.passage.id: row.score for row in second}
+    combined = [
+        ScoredPassage(row.passage, max(row.score, again.get(row.passage.id, 0.0)))
+        for row in first
+    ]
+    covered = best_score(combined) >= VIDEO_COVERAGE_THRESHOLD
+    # Message carries the outcome; the JSON log keeps only allowed extra keys.
+    logger.info("session_rerank_rescored covered=%s", covered)
+    return combined
 
 
 async def _model_rank(
@@ -237,10 +281,7 @@ async def _model_rank(
     result = await text_model.generate_structured(
         ModelRequest(
             purpose=RERANK_PURPOSE,
-            instructions=(
-                "Score each passage from 0 to 1 for the question. "
-                "Return JSON with ranked id and score. Do not add passages."
-            ),
+            instructions=RERANK_INSTRUCTIONS,
             user_input=f"QUESTION:\n{question.strip()}\n\n{listing}",
             evidence=[],
             response_schema=RERANK_SCHEMA,
@@ -248,7 +289,7 @@ async def _model_rank(
             max_output_tokens=2048,
             temperature=0.0,
             timeout_seconds=30,
-            prompt_version="session-rerank-v1",
+            prompt_version="session-rerank-v2",
         )
     )
     ranked = result.parsed.get("ranked") if isinstance(result.parsed, dict) else None
